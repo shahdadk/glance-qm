@@ -86,3 +86,13 @@ supported them. Both scenarios ended with no calendar or delivery action.
 The verifier input is synthetic API speech; it establishes the prompt,
 revision, Jev, Exa, and cue path, not personal identity, face recognition, or
 hardware microphone behavior.
+
+## Proactive public introductions and optional instant path
+
+A short spoken public introduction can request Exa background research without a question or organization. Only the name and optional public professional context are sent. Source corroboration determines whether a possible public profile can be shown; the system never authenticates the speaker from a name or identifies anyone from appearance. Ambiguous names may remain quiet or require clarification. Cue generation budgets 160 characters and preserves uncertainty qualifiers.
+
+Overlength cue repair is bounded to one format-only QM request in Jev-native mode. Candidate IDs, kinds, evidence IDs and other fields remain unchanged; the original statement is retained in detail, added vocabulary is rejected, and a fresh Jev decision must approve the shortened meaning. Failed repair raises a protocol error rather than becoming silent quiet. QM-only mode does not publish a repaired candidate without the required review.
+
+`GLANCE_INSTANT_CONTEXT=true` explicitly enables the optional direct-Jev introduction path and requires `jev-native`. Its default is **false**, and the default provider exposes no prefetch hook. Ineligible contexts use the normal QM flow; Jev holds remain fail-closed. An enabled prefetch hook authorizes read-only public lookup from provisional speech and returns sources only. Core binds those sources to the compatible final segment and requires a fresh final authorization before any cue can publish.
+
+At this checkpoint, both TypeScript projects and all 186 repository tests passed. Independent review also verified default-off behavior, separate partial/final receipts, no speculative publication, negation-preserving source sentence handling, and cancellation/staleness fences. Runtime cold/prefetched verification controls whether the optional flag is enabled for the wearer.

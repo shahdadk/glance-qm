@@ -6,11 +6,11 @@ The visible app is **kompX**. Its independent bundle ID remains `com.shahdad.gla
 
 Recorded on 2026-09-27:
 
-- Full simulator and signed iPhone builds succeed on this Mac's Xcode 26.1.1. The latest candidate passes nine XCTest tests, zero failures.
+- Full simulator and signed iPhone builds succeed on this Mac's Xcode 26.1.1. The latest candidate passes ten XCTest tests, zero failures.
 - Real SDK configuration, Meta registration, DeviceSession startup, Display startup, and native card sends are verified. The wearer confirmed the lens counter.
 - Real glasses `MWDATSpeech` emits nonempty partial and final text. At 14:49:51, this rehearsal had 200 raw events, 52 accepted nonempty updates, six nonempty finals, and 52 authenticated HTTP uploads with status 200.
 - Wearer lens Pause/Resume are verified. Pause stops Speech and updates shared status while retaining Display/session. The wearer explicitly paused again at 14:50:37; that was not a capture failure.
-- The default demo keeps the lens visible with minimal Listening / Tasks / Menu controls. Longer uninterrupted capture, grounded cue rendering, final summary/tasks/action review, and quiet/locked-phone behavior remain separate acceptance checks.
+- The default demo keeps the lens visible with minimal Listening with Start/Pause; task and delivery actions appear contextually. Longer uninterrupted capture, grounded cue rendering, final summary/tasks/action review, and quiet/locked-phone behavior remain separate acceptance checks.
 
 The official current samples document Xcode 26.4+/Swift 6.3+. Actual 1.0.0 interfaces and this app compile with installed Xcode 26.1.1. This is a measured compatibility result, not a general upstream support guarantee; the binary reports Swift 6.3.3.
 
@@ -67,7 +67,7 @@ A fresh launch validates/imports the file, saves the token in Keychain, stores o
 
 The tested LAN route failed on the iPhone with `NSURLErrorDomain -1001/-1004`; authenticated HTTPS fixed it. The hostname remains runtime configuration. HTTP Bearer auth and initial-message WebSocket auth remain required through the tunnel.
 
-The verified default keeps the lens visible with Awaiting speech or Listening plus Tasks/Menu. Counters stay in private diagnostics. The advanced Keep lens visible toggle can opt into experimental cleared-display operation; it is not the default until sustained Speech in that mode is verified. The older private `keepDisplayActiveForDiagnostics` connection-file key is retained for compatibility. Neither mode suppresses cues, details, tasks, summary, or action review.
+The verified default keeps the lens visible with Awaiting speech or Listening plus Start/Pause. Counters stay in private diagnostics. The advanced Keep lens visible toggle can opt into experimental cleared-display operation; it is not the default until sustained Speech in that mode is verified. The older private `keepDisplayActiveForDiagnostics` connection-file key is retained for compatibility. Neither mode suppresses cues, details, tasks, summary, or action review.
 
 ## Lifecycle and behavior
 
@@ -92,3 +92,7 @@ Configuration permits HTTPS and private/local HTTP only. An SDK configuration fa
 `Library/Application Support/GlanceQM/diagnostics.json` in this app's sandbox stores operational states, counters, timestamps, route/host, numeric HTTP/OS errors, SDK session-control error detail, and device don/hinge/thermal state. It excludes tokens, audio, transcript text, attendees, device names, and cue bodies. Retrieve through `devicectl device copy from` with domain `appDataContainer` and identifier `com.shahdad.glanceqm`.
 
 Runtime evidence, the local SDK reference checkout, and build products are ignored by git. [Native attribution](../native/ios/NOTICE.md) identifies official API sources and Meta Developer Terms. The project resolves the pinned remote SPM package; no local SDK copy is required to build.
+
+### Official lifecycle clarification
+
+Meta’s [full official DAT documentation](https://wearables.developer.meta.com/llms.txt?full=true) says display dimming at 20 seconds and sleep at 25 seconds do not end a DAT session. Speech itself can stop on inactivity, timeout, or other constraints. STOPPED requires cleanup and a new user action; no public indefinite-keepalive option was found in the installed DeviceSession/Speech/Display interfaces. Bluetooth background operation is documented, but indefinite locked-phone Speech+Display is not guaranteed. In one observed run the SDK reported “Session ended by device” at 15:49:23 while the phone stayed active until 15:50:23; phone background alone therefore does not explain that stop. For the repeatable demo, keep the app visible on phone and glasses, Start once, and let it listen. Phone auto-lock is disabled only during explicit active capture and restored on pause/end/error. Do not infer a specific wearer gesture from the generic SDK termination reason.

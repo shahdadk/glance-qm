@@ -26,6 +26,7 @@ export interface MeetingRecord extends MeetingSnapshot {
   correctionEpoch: number;
   contextRevision?: number;
   summaryContextDigest?: string;
+  memoryCheckpoint?: { key: string; contextDigest: string; contextRevision: number; summaryRevision: number; state: 'saving' | 'saved' | 'superseded' | 'failed'; receipt?: ProviderReceipt; savedAt?: string; error?: string };
   operatorMessages: { id: string; text: string; createdAt: string }[];
   taskOrigins: Record<string, TaskOrigin>;
   memoryEvidence: Evidence[];
@@ -81,6 +82,7 @@ export class MeetingController extends EventEmitter {
   private loops = new Map<string, Loop>();
   private finalizers = new Map<string, Promise<void>>();
   private summaries = new Map<string, Promise<void>>();
+  private summaryWrites = new Map<string, Promise<ProviderReceipt | undefined>>();
   private actionRuns = new Map<string, Promise<void>>();
   private taskRuns = new Map<string, Promise<void>>();
   private prefetches = new Map<string, PartialPrefetch>();
@@ -619,7 +621,7 @@ export class MeetingController extends EventEmitter {
     if (this.closed || !this.providers.configured.qm) return;
     try {
       for (const record of await this.store.list()) {
-        if (record.status === 'listening' && record.transcript.some(segment => segment.isFinal) && (!record.summary || record.summaryContextDigest !== this.contextDigest(record))) void this.summarize(record.id).catch(error => this.warning(record.id, 'summary_unavailable', this.errorText(error)));
+        if (record.status !== 'ended' && record.transcript.some(segment => segment.isFinal) && (!record.summary || record.summaryContextDigest !== this.contextDigest(record))) void this.summarize(record.id).catch(error => this.warning(record.id, 'summary_unavailable', this.errorText(error)));
       }
     } catch { /* Individual request paths still surface storage failure. */ }
   }
@@ -631,13 +633,55 @@ export class MeetingController extends EventEmitter {
       const record = await this.get(id); const input = this.input(record, record.status === 'ended' || !record.summary);
       const summary = summaryOutputSchema.parse(await bounded(signal => this.providers.summarize(input, signal), this.options.providerTimeoutMs));
       const update = await this.store.update(id, value => {
-        if (value.correctionEpoch !== input.anchor.correctionEpoch) return;
+        if (value.correctionEpoch !== input.anchor.correctionEpoch || this.contextDigest(value) !== input.anchor.contextDigest) return false;
         value.summary = { ...summary, revision: input.anchor.revision, createdAt: this.iso() };
         value.summaryContextDigest = input.anchor.contextDigest!;
+        return true;
       });
-      this.publish(update.value);
+      if (update.result) {
+        this.publish(update.value);
+        if (update.value.status !== 'ended') await this.checkpointSummary(id).catch(error => this.warning(id, 'memory_checkpoint_unavailable', this.errorText(error)));
+      }
     })().finally(() => this.summaries.delete(id));
     this.summaries.set(id, promise); return promise;
+  }
+
+  private checkpointSummary(id: string): Promise<ProviderReceipt | undefined> {
+    const previous = this.summaryWrites.get(id) ?? Promise.resolve(undefined);
+    const run = previous.catch(() => undefined).then(async () => {
+      const claimed = await this.store.update(id, value => {
+        if (!value.summary || value.summaryContextDigest !== this.contextDigest(value)) return undefined;
+        const { text, decisions, openQuestions, owners, nextSteps } = value.summary;
+        const key = createHash('sha256').update(JSON.stringify({ context: value.summaryContextDigest, text, decisions, openQuestions, owners, nextSteps })).digest('hex');
+        if (value.memoryCheckpoint?.key === key && value.memoryCheckpoint.state === 'saved') return { cached: value.memoryCheckpoint.receipt };
+        value.memoryCheckpoint = { key, contextDigest: value.summaryContextDigest, contextRevision: this.contextRevision(value), summaryRevision: value.summary.revision, state: 'saving' };
+        return { key };
+      });
+      if (!claimed.result) return undefined;
+      if ('cached' in claimed.result) return claimed.result.cached;
+      const key = claimed.result.key;
+      const record = claimed.value;
+      // Recheck immediately before the remote write; queued older summaries never
+      // overwrite a newer finalized context after waiting behind another writer.
+      const latest = await this.get(id);
+      if (latest.memoryCheckpoint?.key !== key || this.contextDigest(latest) !== record.summaryContextDigest) {
+        await this.store.update(id, value => { if (value.memoryCheckpoint?.key === key) value.memoryCheckpoint.state = 'superseded'; });
+        return undefined;
+      }
+      try {
+        const receipt = await bounded(signal => this.providers.saveSummary({ meetingId: id, title: record.title, summary: record.summary!, transcript: record.transcript.filter(segment => segment.isFinal) }, signal), this.options.providerTimeoutMs);
+        await this.store.update(id, value => {
+          if (value.memoryCheckpoint?.key !== key) return;
+          value.memoryCheckpoint.state = this.contextDigest(value) === record.summaryContextDigest ? 'saved' : 'superseded';
+          value.memoryCheckpoint.receipt = receipt; value.memoryCheckpoint.savedAt = this.iso();
+        });
+        return receipt;
+      } catch (error) {
+        await this.store.update(id, value => { if (value.memoryCheckpoint?.key === key) { value.memoryCheckpoint.state = 'failed'; value.memoryCheckpoint.error = this.errorText(error); } });
+        throw error;
+      }
+    }).finally(() => { if (this.summaryWrites.get(id) === run) this.summaryWrites.delete(id); });
+    this.summaryWrites.set(id, run); return run;
   }
 
   private startFinalizer(id: string): void {
@@ -668,9 +712,8 @@ export class MeetingController extends EventEmitter {
     }
     try {
       await this.summarize(id);
-      const record = await this.get(id);
-      if (!record.summary) throw new Error('QM final summary is unavailable.');
-      const receipt = await bounded(signal => this.providers.saveSummary({ meetingId: id, title: record.title, summary: record.summary!, transcript: record.transcript.filter(segment => segment.isFinal) }, signal), this.options.providerTimeoutMs);
+      const receipt = await this.checkpointSummary(id);
+      if (!receipt) throw new Error('A current QM summary is unavailable for memory persistence.');
       const update = await this.store.update(id, value => { value.finalization = { state: 'completed', receipt }; });
       this.publish(update.value);
     } catch (error) {
@@ -766,7 +809,7 @@ export class MeetingController extends EventEmitter {
     for (let count = 0; count < 1000; count++) {
       const loop = this.loops.get(id);
       const prefetch = this.prefetches.get(id);
-      const runs = [loop?.inFlight, prefetch?.inFlight, this.finalizers.get(id), this.summaries.get(id), ...this.actionRuns.values(), ...this.taskRuns.values()].filter(Boolean) as Promise<void>[];
+      const runs = [loop?.inFlight, prefetch?.inFlight, this.finalizers.get(id), this.summaries.get(id), this.summaryWrites.get(id), ...this.actionRuns.values(), ...this.taskRuns.values()].filter(Boolean) as Promise<unknown>[];
       if (runs.length) await Promise.allSettled(runs);
       else if (loop?.timer || prefetch?.timer) await new Promise(resolve => setTimeout(resolve, 5));
       else return;
@@ -779,5 +822,6 @@ export class MeetingController extends EventEmitter {
     for (const id of this.prefetches.keys()) this.stopPrefetch(id);
     for (const loop of this.loops.values()) { if (loop.timer) clearTimeout(loop.timer); loop.pending = false; }
     await Promise.allSettled([...this.loops.values()].flatMap(loop => loop.inFlight ? [loop.inFlight] : []).concat([...this.finalizers.values()], [...this.summaries.values()], [...this.actionRuns.values()], [...this.taskRuns.values()], [...this.prefetches.values()].flatMap(state => state.inFlight ? [state.inFlight] : [])));
+    await Promise.allSettled([...this.summaryWrites.values()]);
   }
 }

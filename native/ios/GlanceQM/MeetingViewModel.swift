@@ -617,7 +617,7 @@ final class MeetingViewModel: ObservableObject {
             } else { glasses.clear() }
             return
         }
-        var heading = microphoneActive ? "Listening" : (isCapturing ? "Connecting" : "Microphone off")
+        var heading = microphoneActive ? "Listening" : (isCapturing ? "Connecting" : "kompX")
         var text = isCapturing ? "Stay in the conversation. A useful cue will appear when it is ready." : "Microphone off."
         if isCapturing && !microphoneActive { text = "Connecting microphone. Speech is not active yet." }
         var key = "listening-\(isCapturing)-\(microphoneActive)"

@@ -69,10 +69,23 @@ describe('native instant context', () => {
     overlong.evidence.push({ id: 'exa:2', kind: 'external', text: `Ada Lovelace ${'was repeatedly misquoted and '.repeat(6)}did not save $1.5 billion through the Analytical Engine.`, label: 'Ada biography', url: 'https://museum.org/ada' });
     expect(await tryInstantContext(fixture.gate, overlong, signal())).toBeUndefined();
   });
-  it('searches a new identity rather than reusing unrelated previous sources', async () => {
-    const fixture = gate(); const current = input();
+  it('lets Jev hold unrelated previous sources instead of treating a string match as identity proof', async () => {
+    const fixture = gate(true); const current = input();
     current.evidence.push({ id: 'exa:old', kind: 'external', text: 'An unrelated person founded a business.', label: 'Different biography', url: 'https://museum.org/other' });
-    expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'research', query: 'Ada Lovelace' });
+    expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'quiet' });
+    expect(fixture.batch).toHaveBeenCalledTimes(1);
+  });
+  it('prefers the last repeated introduction and lets Jev validate an ASR spelling variant', async () => {
+    const fixture = gate(); const current = input("Hi, I'm Gary Tatten. Let me try that again. I'm Gary Tan.");
+    expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'research', query: 'Gary Tan' });
+    const sentence = 'Garry Tan is president and CEO of Y Combinator and a General Partner.';
+    current.evidence.push({ id: 'exa:alias', kind: 'external', text: sentence, label: 'Garry Tan: YC Partner', url: 'https://www.ycombinator.com/people/garry-tan' });
+    const result = await tryInstantContext(fixture.gate, current, signal());
+    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: ${sentence}`, evidenceIds: ['exa:alias'] });
+    expect(result?.authorization?.verify(current)).toBe(true);
+    const q = fixture.batch.mock.calls[1]![0].questions.action!;
+    expect(q.instructions).toContain('organization/role context conflicts');
+    expect(q.instructions).toContain('phonetic/spelling variant');
   });
   it('never publishes partial speech, but explicitly authorized prefetch can select research only', async () => {
     const fixture = gate(); const partial = input(undefined, false);
