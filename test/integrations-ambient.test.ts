@@ -147,3 +147,22 @@ test('judge explicitly distinguishes a backend research request from already hav
   await createAmbientProviders(fixtureEnv).judge(input,new AbortController().signal);
   expect(prompt).toContain('BACKEND_RESEARCH_CAPABILITY: unavailable');expect(prompt).not.toContain('BACKEND_RESEARCH_CAPABILITY: available');
 });
+
+test.each([
+  ['Garry Tan','Y Combinator'],
+  ['Fei-Fei Li','Stanford University'],
+])('public introduction permits grounded research without a question: %s',async(name,organization)=>{
+  const text=`I'm ${name}, from ${organization}.`;
+  const input={...fixtureInput,recentTranscript:[{...fixtureInput.recentTranscript[0]!,text}],evidence:[{...fixtureInput.evidence[0]!,text}]};
+  let prompt='';
+  vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
+    if(String(url).includes('async=1')){prompt=JSON.parse(String(init?.body)).text;return new Response(JSON.stringify({runId:'fixture-public-intro'}),{headers:{'content-type':'application/json'}});}
+    const reply={kind:'research',query:`${name} ${organization} official biography background education`,evidenceIds:['transcript:fixture-segment:1']};
+    return new Response(`data: ${JSON.stringify({type:'CUSTOM',name:'run',value:{status:'done',result:{status:'ok',reply:JSON.stringify(reply)}}})}\n\ndata: ${JSON.stringify({type:'RUN_FINISHED'})}\n\n`,{headers:{'content-type':'text/event-stream'}});
+  }));
+  const result=await createAmbientProviders({...fixtureEnv,EXA_API_KEY:'fixture'}).judge(input,new AbortController().signal);
+  expect(result).toMatchObject({kind:'research',evidenceIds:['transcript:fixture-segment:1']});
+  const instructions=prompt.split('SOURCE_ID_CATALOG=')[0]!;
+  expect(instructions).toContain('name-only introduction');expect(instructions).toContain('sources support the name AND');
+  expect(instructions).not.toContain(name);expect(instructions).not.toContain(organization);
+});

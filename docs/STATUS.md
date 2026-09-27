@@ -23,6 +23,11 @@ Last updated: final integration verification
 - Exa live retrieval returned four attributed sources, and the research-first
   PRD path was verified through the core. Jev live adapter/gate probes and
   Jev-native core verification pass; QM remains the default decision mode.
+- The proactive public-introduction verifier passed 13/13 with synthetic
+  Garry Tan/Y Combinator and Satya Nadella/Microsoft speech inputs: Jev
+  authorized Exa, four identity-supporting sources returned for each, and each
+  produced a sourced cue without a question or wake word. No external action
+  was sent; this is not a hardware or identity-recognition claim.
 - Calendar OAuth read and exact preview verification pass; no invitation has
   been sent. Document delivery is digest-, recipient-, generation-, and
   context-bound; no email has been sent.

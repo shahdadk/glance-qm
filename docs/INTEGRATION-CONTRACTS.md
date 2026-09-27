@@ -75,3 +75,14 @@ Live labeled semantic QA on 2026-09-27: a clear shared need during conversation 
 The canonical `GLANCE_DECISION_MODE` values are `qm` and `jev-native`. Legacy `jev` is accepted. An unknown nonempty mode throws a configuration error instead of silently selecting QM.
 
 Validation: both TypeScript projects and 24 focused Exa/ambient tests passed. The real provider factory returned four attributed `nodejs.org` sources in 407ms through Exa on 2026-09-27. This verifies the adapter/factory path; application-level research selection is verified separately by core.
+
+The proactive public-introduction verifier passed **13/13** checks on
+2026-09-27 (`scripts/verify-public-introduction.mjs`). Synthetic introductions
+for Garry Tan/Y Combinator and Satya Nadella/Microsoft, with no question or
+wake word, each caused native Jev to authorize Exa research, returned four
+matching public sources, and produced a useful cue citing retrieved external
+evidence. Stanford-specific claims were held unless the returned evidence
+supported them. Both scenarios ended with no calendar or delivery action.
+The verifier input is synthetic API speech; it establishes the prompt,
+revision, Jev, Exa, and cue path, not personal identity, face recognition, or
+hardware microphone behavior.
