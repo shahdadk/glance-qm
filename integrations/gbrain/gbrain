@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+# Install beside gbrain-bin (official compiled binary) and loopback-proxy.mjs.
+base=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+node "$base/loopback-proxy.mjs" </dev/null >/dev/null 2>&1 &
+exec "$base/gbrain-bin" "$@"

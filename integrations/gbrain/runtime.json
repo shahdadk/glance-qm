@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/garrytan/gbrain.git",
+  "commit": "e78f1c38b947b053f3a46881340f74f316be855a",
+  "version": "0.59.0.0",
+  "license": "MIT",
+  "postgresImage": "pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b",
+  "postgresPort": 55440,
+  "httpPort": 3131,
+  "container": "glance-qm-gbrain-postgres",
+  "volume": "glance-qm-gbrain-data",
+  "source": "glance-demo",
+  "clients": {
+    "backend": ["chan-glance-demo/"],
+    "alice": ["emp-alice/", "chan-glance-demo/"],
+    "bob": ["emp-bob/", "chan-glance-demo/"]
+  }
+}
