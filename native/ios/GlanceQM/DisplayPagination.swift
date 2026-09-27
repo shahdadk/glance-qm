@@ -1,5 +1,13 @@
 import Foundation
 
+/// Operator-requested local demo brief. This is saved company copy, not a live lookup.
+enum PreloadedCompanyBrief {
+    static let title = "Liquid Energy"
+    static let body = "• Modular AI compute\n• High-density air cooling\n• Adaptive thermal controls"
+    static let sourceURL = "https://www.liquidenergy.world/"
+    static let provenance = "Preloaded brief · liquidenergy.world"
+}
+
 /// Presentation only: keeps uncertainty qualifiers and every fact supplied by the server.
 struct ContextCardContent: Equatable {
     let heading: String?

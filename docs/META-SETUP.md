@@ -6,7 +6,7 @@ The visible app is **kompX**. Its independent bundle ID remains `com.shahdad.gla
 
 Recorded on 2026-09-27:
 
-- Full simulator and signed iPhone builds succeed on this Mac's Xcode 26.1.1. The latest native context-card candidate passes twelve XCTest tests, zero failures.
+- Full simulator and signed iPhone builds succeed on this Mac's Xcode 26.1.1. The latest native preloaded-brief candidate passes thirteen XCTest tests, zero failures.
 - Real SDK configuration, Meta registration, DeviceSession startup, Display startup, and native card sends are verified. The wearer confirmed the lens counter.
 - Real glasses `MWDATSpeech` emits nonempty partial and final text. At 14:49:51, this rehearsal had 200 raw events, 52 accepted nonempty updates, six nonempty finals, and 52 authenticated HTTP uploads with status 200.
 - Wearer lens Pause/Resume are verified. Pause stops Speech and updates shared status while retaining Display/session. The wearer explicitly paused again at 14:50:37; that was not a capture failure.
@@ -21,6 +21,14 @@ At 23:23Z, the new signed card build was installed and its private replacement b
 At 23:38:22Z, physical diagnostics recorded a successful **A useful thought** send from the installed native card renderer, with Display ready and Speech paused. The backend had reprocessed already-captured real speech through the existing Pause control after the source-cache fix; no words were injected or microphone activated. The card expired back to kompX at 23:38:30Z. After wearer Start at 23:38:35Z, the card rendered again at 23:38:36Z; wearer **Details** at 23:38:38Z opened **Why this cue 1/12**, and **Done** at 23:38:42Z returned to kompX. This verifies native card delivery and wearer interaction. Because maintenance and reprocessing preceded the first card, this is not an immediate speech-to-lens latency benchmark. It does not establish the legibility of every fact or general reliability. Sanitized diagnostic receipts remain in ignored `.local/native-evidence/`.
 
 The official current samples document Xcode 26.4+/Swift 6.3+. Actual 1.0.0 interfaces and this app compile with installed Xcode 26.1.1. This is a measured compatibility result, not a general upstream support guarantee; the binary reports Swift 6.3.3.
+
+## Manual preloaded company brief
+
+The operator-requested manual shortcut is installed in the 23:45Z build. On the normal listening or paused home view, **Liquid Energy** is the default focused button via DAT `actionRole(.primary)`; select it with the supported wristband Select gesture. It opens a local native card immediately, independently of Speech, backend judgment, and network access. Its visible **Preloaded brief** label distinguishes it from a live research response. The three saved company claims—modular AI compute, high-density air cooling, and adaptive thermal controls—are attributed to the company site, [liquidenergy.world](https://www.liquidenergy.world/), as retrieved earlier through Exa. They are company claims, not independently verified performance results.
+
+The manual card remains open until **Done**; automatic cue expiry cannot dismiss it. Opening or dismissing it does not start or stop the microphone. Explicit Start/Pause remains a separate control. Thirteen XCTest tests and the signed device build passed; installation occurred after confirming Speech was stopped.
+
+This does **not** remap a finger-specific middle gesture. The installed DAT 1.0 interface exposes only `ActionRole.primary`, and its Inputs API reports a semantic `select` from `neuralBand`, without a finger identity. The official Inputs documentation also warns that consuming input can intercept normal display interaction, and real hardware does not currently deliver Back events. The shortcut therefore uses the supported default-button selection path, with no new input capability or permission.
 
 ## Build and install
 

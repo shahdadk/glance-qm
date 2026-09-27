@@ -1,6 +1,13 @@
 import XCTest
 @testable import GlanceQM
 final class DisplayPaginationTests: XCTestCase {
+    func testPreloadedBriefIsThreeFactsWithExplicitProvenance() {
+        XCTAssertEqual(PreloadedCompanyBrief.title, "Liquid Energy")
+        XCTAssertEqual(ContextCardContent(text: PreloadedCompanyBrief.body).rows.count, 3)
+        XCTAssertEqual(DisplayPagination(text: PreloadedCompanyBrief.body).pages.count, 1)
+        XCTAssertTrue(PreloadedCompanyBrief.provenance.hasPrefix("Preloaded brief"))
+        XCTAssertEqual(PreloadedCompanyBrief.sourceURL, "https://www.liquidenergy.world/")
+    }
     func testContextCardRetainsPossibleMatchQualifierAndAllBullets() {
         let text = "Possible match: A Person · Company\n• First fact.\n• Second fact.\n• Third fact."
         let card = ContextCardContent(text: text)

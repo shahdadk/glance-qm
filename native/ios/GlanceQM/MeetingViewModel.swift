@@ -62,6 +62,7 @@ final class MeetingViewModel: ObservableObject {
     private var transientTask: Task<Void, Never>?
     private var transientNotice: (title: String, body: String, focus: GlassesFocus)?
     private var pendingFollowUpNotice: (title: String, body: String, focus: GlassesFocus)?
+    private var showingPreloadedBrief = false
 
     var microphoneActive: Bool { inputRoute == .glasses ? glasses.speechReady : phone.isRunning }
 
@@ -567,6 +568,7 @@ final class MeetingViewModel: ObservableObject {
     }
 
     private func returnToListening() {
+        showingPreloadedBrief = false
         transientTask?.cancel()
         transientNotice = pendingFollowUpNotice
         pendingFollowUpNotice = nil
@@ -587,7 +589,7 @@ final class MeetingViewModel: ObservableObject {
         transientTask?.cancel()
         transientTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled, let self, !self.showingPreloadedBrief else { return }
             if self.focus == .cue || self.focus == .listening {
                 self.returnToListening()
             }
@@ -595,8 +597,21 @@ final class MeetingViewModel: ObservableObject {
     }
 
     private func updateDisplay() {
+        if showingPreloadedBrief {
+            glasses.render(GlassesCard(title: PreloadedCompanyBrief.title, body: PreloadedCompanyBrief.body, primaryLabel: "Done", primary: { [weak self] in self?.returnToListening() }, showsSecondary: false, identity: "preloaded-liquid-energy-v1", isContextCard: true, captureLabel: isCapturing ? "Pause" : "Start", captureAction: { [weak self] in self?.toggleExplicitCapture() }, sourceLabel: PreloadedCompanyBrief.provenance))
+            return
+        }
         if (startOperationActive || isCapturing), !microphoneActive {
             glasses.render(GlassesCard(title: "kompX", body: loadingText, showsButtons: false))
+            return
+        }
+        if focus == .listening, transientNotice == nil {
+            let body = startFailureMessage ?? (isCapturing ? (hasHeardSpeech ? "Listening" : "Awaiting speech") : "Microphone off")
+            displayTitle = "kompX"; displayBody = body
+            displayPrimaryLabel = "Liquid Energy"; displaySecondaryLabel = isCapturing ? "Pause" : "Start"
+            primary = { [weak self] in self?.showPreloadedBrief() }
+            secondary = { [weak self] in self?.toggleExplicitCapture() }
+            glasses.render(GlassesCard(title: "kompX", body: body, primaryLabel: "Liquid Energy", secondaryLabel: displaySecondaryLabel, primary: primary, secondary: secondary, showsSecondary: true, identity: "home-preloaded-brief"))
             return
         }
         if let message = startFailureMessage, !isCapturing, focus == .listening {
@@ -727,5 +742,16 @@ final class MeetingViewModel: ObservableObject {
             Task { if self.isCapturing { await self.pause() } else { await self.startListening(source: "lens") } }
         }, sourceLabel: meeting.cue?.evidence.isEmpty == false ? "Sources in Details" : "Context"))
 
+    }
+
+    private func showPreloadedBrief() {
+        transientTask?.cancel()
+        showingPreloadedBrief = true
+        NativeDiagnostics.record(["lastPreloadedBriefOpenedAt": ISO8601DateFormatter().string(from: Date())])
+        updateDisplay()
+    }
+
+    private func toggleExplicitCapture() {
+        Task { if isCapturing { await pause() } else { await startListening(source: "lens") } }
     }
 }
