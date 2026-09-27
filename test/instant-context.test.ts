@@ -97,6 +97,25 @@ describe('native instant context', () => {
     expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'quiet' });
     expect(fixture.batch).toHaveBeenCalledTimes(2);
   });
+  it('requests fresh company research when Jev rejects the previous profile sources', async () => {
+    const fixture=gate(); const original=fixture.batch.getMockImplementation()!;
+    fixture.batch.mockImplementation(async request => {
+      const result=await original(request);
+      if(request.questions.source?.type==='choice') {
+        const keys=Object.keys(request.questions.source.criteria);
+        result.answers.source={type:'choice',choice:'none',probabilities:Object.fromEntries(keys.map(key=>[key,key==='none'?1:0])),confidence:1};
+      }
+      return result;
+    });
+    const current=input('from liquid energy');
+    current.evidence.push({id:'exa:old',kind:'external',label:'Ada Lovelace biography',text:'Ada Lovelace studied advanced mathematics.',url:'https://museum.org/ada'});
+    const result=await tryInstantContext(fixture.gate,current,signal());
+    expect(result).toMatchObject({kind:'research',query:'liquid energy official company technology',evidenceIds:['transcript:s1:0']});
+    expect(result?.authorization?.verify(current)).toBe(true);
+    const changed=structuredClone(current);changed.evidence[1]!.text='Changed previous source';
+    expect(result?.authorization?.verify(changed)).toBe(false);
+    expect(fixture.batch).toHaveBeenCalledTimes(2);
+  });
   it('prefers the last repeated introduction and lets Jev validate an ASR spelling variant', async () => {
     const fixture = gate(); const current = input("Hi, I'm Gary Tatten. Let me try that again. I'm Gary Tan.");
     expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'research', query: 'Gary Tan' });
