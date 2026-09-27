@@ -154,6 +154,12 @@ snapshot digest `230c6d5b004d2ce39630b9bef0901a71380a600e7b1657d99f1d724aa1ec442
 Receipts expire and are process-local; this reference is audit evidence, not a
 reusable authorization.
 
+The full-app synthetic API/WebSocket verifier separately passed 13/13 public
+introduction checks in 8.092 seconds, including fresh Jev receipts, four-source
+Exa retrieval, and sourced cues for two named public profiles. This is backend
+transport evidence from synthetic speech input; it is not a measurement of
+physical wearer display latency or sustained background capture.
+
 These are synthetic, real-provider helper checks, not end-to-end browser or
 glasses latency measurements. Keep the runtime feature flag off until its own
 integration checks pass. Prefetch may return sources only; it never publishes

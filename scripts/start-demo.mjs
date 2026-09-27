@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, createHmac } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, closeSync, chmodSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, closeSync, chmodSync, readdirSync } from 'node:fs';
 import { homedir, networkInterfaces } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ chmodSync(localDir, 0o700);
 const stateFile = join(localDir, 'demo-processes.json');
 const logFile = join(localDir, 'demo-backend.log');
 const node = process.env.QM_NODE_BIN || ['/opt/homebrew/opt/node@24/bin/node', '/usr/local/opt/node@24/bin/node'].find(existsSync) || process.execPath;
-const allowed = new Set(`PATH HOME TMPDIR LANG LC_ALL TZ USER LOGNAME SHELL NODE_EXTRA_CA_CERTS PORT HOST WEB_PORT GLANCE_LOCAL_DIR GLANCE_OPERATOR_TOKEN GLANCE_ALLOWED_ORIGINS GLANCE_DECISION_MODE GLANCE_AMBIENT_DEBOUNCE_MS QM_BASE_URL QM_SOURCE_SECRET QM_SIGNING_SECRET CORE_SIGNING_SECRET QM_PROJECT_ID QM_THREAD_REF QM_ACTOR_EXTERNAL_ID QM_PRINCIPAL_ID QM_ACTOR_DISPLAY_NAME QM_ACTOR_EMAIL QM_MODEL QM_HARNESS QM_THINKING_LEVEL QM_JUDGE_MODEL QM_JUDGE_THINKING_LEVEL QM_JUDGE_FAST_MODE QM_CONNECTION_FILE QM_RUNTIME_ENV GBRAIN_CONFIG_FILE GBRAIN_MCP_URL GBRAIN_BASE_URL GBRAIN_CLIENT_ID GBRAIN_CLIENT_SECRET GBRAIN_TOKEN_URL GBRAIN_RECALL_TOOL GBRAIN_SAVE_SUMMARY_TOOL GBRAIN_GET_PAGE_TOOL GBRAIN_AUTH_MODE GBRAIN_BEARER_TOKEN GBRAIN_API_TOKEN MEMORABLE_API_KEY MEMORABLE_BIN MEMORABLE_HOME MEMORABLE_BASE_URL MEMORABLE_API_TOKEN MEMORABLE_CONFIG_FILE GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REFRESH_TOKEN GOOGLE_OAUTH_SCOPES GOOGLE_GMAIL_FROM_EMAIL GOOGLE_ACCESS_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN GOOGLE_CALENDAR_ID GOOGLE_OAUTH_CONFIG_FILE GOOGLE_WORKSPACE_CLI_CONFIG_DIR GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE EXA_API_KEY JEV_API_KEY TYPESAFE_API_KEY JEV_MODEL JEV_BASE_URL`.split(' '));
+const allowed = new Set(`PATH HOME TMPDIR LANG LC_ALL TZ USER LOGNAME SHELL NODE_EXTRA_CA_CERTS PORT HOST WEB_PORT GLANCE_LOCAL_DIR GLANCE_OPERATOR_TOKEN GLANCE_ALLOWED_ORIGINS GLANCE_DECISION_MODE GLANCE_AMBIENT_DEBOUNCE_MS GLANCE_INSTANT_CONTEXT QM_BASE_URL QM_SOURCE_SECRET QM_SIGNING_SECRET CORE_SIGNING_SECRET QM_PROJECT_ID QM_THREAD_REF QM_ACTOR_EXTERNAL_ID QM_PRINCIPAL_ID QM_ACTOR_DISPLAY_NAME QM_ACTOR_EMAIL QM_MODEL QM_HARNESS QM_THINKING_LEVEL QM_JUDGE_MODEL QM_JUDGE_THINKING_LEVEL QM_JUDGE_FAST_MODE QM_CONNECTION_FILE QM_RUNTIME_ENV GBRAIN_CONFIG_FILE GBRAIN_MCP_URL GBRAIN_BASE_URL GBRAIN_CLIENT_ID GBRAIN_CLIENT_SECRET GBRAIN_TOKEN_URL GBRAIN_RECALL_TOOL GBRAIN_SAVE_SUMMARY_TOOL GBRAIN_GET_PAGE_TOOL GBRAIN_AUTH_MODE GBRAIN_BEARER_TOKEN GBRAIN_API_TOKEN MEMORABLE_API_KEY MEMORABLE_BIN MEMORABLE_HOME MEMORABLE_BASE_URL MEMORABLE_API_TOKEN MEMORABLE_CONFIG_FILE GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REFRESH_TOKEN GOOGLE_OAUTH_SCOPES GOOGLE_GMAIL_FROM_EMAIL GOOGLE_ACCESS_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN GOOGLE_CALENDAR_ID GOOGLE_OAUTH_CONFIG_FILE GOOGLE_WORKSPACE_CLI_CONFIG_DIR GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE EXA_API_KEY JEV_API_KEY TYPESAFE_API_KEY JEV_MODEL JEV_BASE_URL`.split(' '));
 const env = {};
 function merge(source) {
   for (const [key, value] of Object.entries(source)) if (allowed.has(key) && typeof value === 'string' && value.trim()) env[key] = value;
@@ -49,6 +49,21 @@ const loopback = `http://127.0.0.1:${port}`;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const owned = [];
 const preserved = [];
+function sourceVersion() {
+  const hash = createHash('sha256');
+  function visit(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) { hash.update(path.slice(root.length)); hash.update('\0'); hash.update(readFileSync(path)); hash.update('\0'); }
+    }
+  }
+  visit(join(root, 'src'));
+  for (const name of ['package.json', 'package-lock.json']) { hash.update(name); hash.update(readFileSync(join(root, name))); }
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout?.trim();
+  const dirty = spawnSync('git', ['status', '--porcelain', '--', 'src', 'package.json', 'package-lock.json'], { cwd: root, encoding: 'utf8' }).stdout?.trim();
+  return { gitHead: head, sourceDirty: Boolean(dirty), sourceTreeSha256: hash.digest('hex'), capturedAt: new Date().toISOString() };
+}
 function identity(pid) { const r = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], { encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : ''; }
 function saveState(extra = {}) { privateWrite(stateFile, JSON.stringify({ version: 1, root, localDir, processes: [...preserved, ...owned], ...extra }, null, 2) + '\n'); }
 async function fetchLocal(path, options = {}) { return fetch(`${loopback}${path}`, { ...options, signal: AbortSignal.timeout(2000), redirect: 'error' }); }
@@ -146,6 +161,7 @@ try {
     const probe = launch('backend', ['--import', 'tsx', join(root, 'src/server/index.ts')], { ...env, HOST: '127.0.0.1', GLANCE_LOCAL_DIR: join(localDir, 'launcher-auth-probe') });
     await waitBackend(probe); await authCheck();
     await terminate(probe); owned.splice(owned.indexOf(probe), 1); saveState();
+    const deployedSource = sourceVersion();
     const backend = launch('backend', ['--import', 'tsx', join(root, 'src/server/index.ts')], env);
     await waitBackend(backend); await authCheck();
     const data = await healthy();
@@ -158,7 +174,7 @@ try {
       for (let n = 0; n < 60; n++) { try { webReady = (await fetch(`http://127.0.0.1:${webPort}/`, { signal: AbortSignal.timeout(1000) })).ok; } catch {} if (webReady) break; if (identity(web.pid) !== web.identity) break; await delay(100); }
       if (!webReady) throw new Error('Web surface failed to become healthy; inspect its private log.');
     }
-    saveState({ configHash, backendURL: loopback, startedAt: new Date().toISOString(), authVerified: true });
+    saveState({ configHash, backendURL: loopback, startedAt: new Date().toISOString(), authVerified: true, sourceVersion: deployedSource });
     report(data, tokenPath, join(localDir, 'pairing.json'));
   }
 } catch (error) {
