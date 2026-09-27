@@ -61,6 +61,21 @@ test('QM threads separate meetings and document tasks without changing project s
   expect(doc.content).toBe('# Fixture document');expect(doc.receipt.id).toBe('fixture-run');expect(doc.url).toBeUndefined();expect(doc.receipt.url).toBeUndefined();
 });
 
+test('rolling summaries and ambient judgments use separate QM conversations',async()=>{
+  const requests: Record<string,unknown>[]=[];
+  vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
+    if(String(url).includes('async=1')){requests.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({runId:'fixture-run'}),{headers:{'content-type':'application/json'}});}
+    const reply=requests.length===1?{text:'Fixture summary',decisions:[],openQuestions:[],owners:[],nextSteps:[]}:{kind:'quiet',reason:'Fixture quiet'};
+    return new Response(`data: ${JSON.stringify({type:'CUSTOM',name:'run',value:{status:'done',result:{status:'ok',reply:JSON.stringify(reply)}}})}\n\ndata: ${JSON.stringify({type:'RUN_FINISHED'})}\n\n`,{headers:{'content-type':'text/event-stream'}});
+  }));
+  const providers=createAmbientProviders(fixtureEnv);const signal=new AbortController().signal;
+  await providers.summarize(fixtureInput,signal);
+  await providers.judge(fixtureInput,signal);
+  const conversations=requests.map(r=>r.conversation as {threadRef:string;channelRef:string});
+  expect(conversations[0]!.threadRef).not.toBe(conversations[1]!.threadRef);
+  expect(conversations[0]!.channelRef).toBe(conversations[1]!.channelRef);
+});
+
 test('fast ambient judge configuration does not change the document model',async()=>{
   const requests: Record<string,unknown>[]=[];
   vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
@@ -209,7 +224,7 @@ test('opt-in partial lookup tolerates ASR spelling and final publication gets a 
   let gates=0;let searches=0;let qmCalls=0;
   vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
     if(String(url).includes('typesafe.ai')){
-      gates++;const request=JSON.parse(String(init?.body));if(!request.questions.action) return new Response(JSON.stringify({model:'fixture',answers:Object.fromEntries(Object.keys(request.questions).map(key=>[key,{type:'noul',noul:1}])),usage:{input_tokens:1,output_tokens:1}}),{headers:{'content-type':'application/json'}});const ids=Object.keys(request.questions.action.criteria);const chosen=ids.find(id=>id!=='__hold__')!;
+      gates++;const request=JSON.parse(String(init?.body));if(!request.questions.action) return new Response(JSON.stringify({model:'fixture',answers:Object.fromEntries(Object.entries(request.questions).map(([key,raw])=>{const q=raw as {type:string;criteria:Record<string,unknown>};return [key,q.type==='choice'?{type:'choice',choice:Object.keys(q.criteria)[0],probabilities:Object.fromEntries(Object.keys(q.criteria).map((id,index)=>[id,index===0?1:0])),confidence:1}:{type:'noul',noul:1}];})),usage:{input_tokens:1,output_tokens:1}}),{headers:{'content-type':'application/json'}});const ids=Object.keys(request.questions.action.criteria);const chosen=ids.find(id=>id!=='__hold__')!;
       return new Response(JSON.stringify({model:'jev-1.13.0',answers:{action:{type:'choice',choice:chosen,probabilities:Object.fromEntries(ids.map(id=>[id,id===chosen?1:0])),confidence:1}},usage:{input_tokens:1,output_tokens:1}}),{headers:{'content-type':'application/json'}});
     }
     if(String(url).includes('api.exa.ai')){searches++;return new Response(JSON.stringify({results:[{url:'https://example.org/profile',title:'Garry Tan — fixture public profile',text:'Garry Tan leads a public technology organization.'}]}),{headers:{'content-type':'application/json'}});}

@@ -8,7 +8,7 @@ function input(text = "Hi, I'm Ada Lovelace.", isFinal = true): AmbientInput {
 }
 function gate(hold = false) {
   const batch = vi.fn<JevAdapter['batch']>().mockImplementation(async request => {
-    if (!request.questions.action) return { model: 'fixture', answers: Object.fromEntries(Object.keys(request.questions).map(key => [key, { type: 'noul' as const, noul: 1 }])), usage: { input_tokens: 1, output_tokens: 1 } };
+    if (!request.questions.action) return { model: 'fixture', answers: Object.fromEntries(Object.entries(request.questions).map(([key, question]) => [key, question.type === 'choice' ? { type: 'choice' as const, choice: Object.keys(question.criteria)[0]!, probabilities: Object.fromEntries(Object.keys(question.criteria).map((id, index) => [id, index === 0 ? 1 : 0])), confidence: 1 } : { type: 'noul' as const, noul: 1 }])), usage: { input_tokens: 1, output_tokens: 1 } };
     const q = request.questions.action!;
     if (q.type !== 'choice') throw new Error('Expected choice');
     const keys = Object.keys(q.criteria);
@@ -44,6 +44,21 @@ describe('native instant context', () => {
     const fixture = gate();
     const result = await tryInstantContext(fixture.gate, input("I'm Sajan Khosa from Liquid Energy."), signal());
     expect(result).toMatchObject({ kind: 'research', query: 'Sajan Khosa, Liquid Energy official company technology' });
+  });
+  it('preserves public company fragments and lowercase ASR without inventing a person', async () => {
+    expect(instantIdentitySpans('Cosa from Liquid Energy.')).toEqual(['from Liquid Energy']);
+    expect(instantIdentitySpans('From liquid energy, I’m years old.').at(-1)).toBe('from liquid energy');
+    const fixture = gate();
+    expect(await tryInstantContext(fixture.gate, input('Cosa from Liquid Energy.'), signal())).toMatchObject({kind:'research',query:'Liquid Energy official company technology'});
+    expect(await tryInstantContext(fixture.gate, input("I'm marisol vega from northstar labs."), signal())).toMatchObject({kind:'research',query:'marisol vega, northstar labs official company technology'});
+  });
+  it('retains an introduction through short fillers but expires after twenty seconds', async () => {
+    const fixture = gate(); const current=input('Cosa from Liquid Energy.');
+    current.recentTranscript.push({id:'filler',revision:0,isFinal:true,text:'Um.',capturedAt:'2026-09-27T00:00:15Z'});
+    current.evidence.push({id:'transcript:filler:0',kind:'transcript',text:'Um.',label:'Transcript'});
+    expect(await tryInstantContext(fixture.gate,current,signal())).toMatchObject({kind:'research',query:'Liquid Energy official company technology',evidenceIds:['transcript:s1:0']});
+    current.recentTranscript[1]!.capturedAt='2026-09-27T00:00:21Z';
+    expect(await tryInstantContext(fixture.gate,current,signal())).toBeUndefined();
   });
   it('holds when Jev rejects an enumerated span; regex does not authorize research', async () => {
     const fixture = gate(true);
@@ -101,7 +116,7 @@ describe('native instant context', () => {
     expect(result).toMatchObject({ kind: 'cue', text: 'Possible match: Marisol Vega\n• Studied engineering at Eastlake\n• Co-founded Moonbeam\n• Worked at Bluebird', evidenceIds: ['exa:bio'] });
     expect(result?.authorization?.verify(current)).toBe(true);
     const questions = fixture.batch.mock.calls[0]![0].questions;
-    expect(Object.values(questions).every(question => question.type === 'noul')).toBe(true);
+    expect(Object.entries(questions).filter(([key]) => key !== 'source').every(([, question]) => question.type === 'noul')).toBe(true);
     const final = fixture.batch.mock.calls[1]![0].questions.action!;
     expect(final.type === 'choice' && Object.keys(final.criteria)).toEqual(['fact_card', '__hold__']);
     const changed = structuredClone(current); changed.evidence[1]!.text += ' Correction.';

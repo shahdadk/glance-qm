@@ -41,6 +41,20 @@ Last updated: final integration verification
 
 ## Verification evidence
 
+- Physical speech exposed two further defects: clipped/lowercase company
+  mentions missed the accelerated lookup, and a QM judgment returned the
+  preceding summary's JSON shape because both roles shared one conversation.
+  Company lookup now retains a recent introduction across brief filler speech,
+  uses company-specific evidence selection, and keeps the strict 0.8 publication
+  threshold. Judge and summary work use distinct QM conversation namespaces.
+  A real summary-then-judgment provider probe passed on those separate threads.
+- At 2026-09-27T23:33:40Z, an isolated replay of seven captured ASR finals at
+  their original 22-second spacing produced a sourced Liquid Energy card over
+  WebSocket 1,425 ms after the company fragment, with zero warnings. The three
+  bullets came from the company's public site and retained “Possible match”
+  and “company claims” labels. This replays recorded speech; it does not prove
+  a new physical lens delivery. Updated checks pass 208 tests in 14 files.
+
 - Final context-card revision: `npm run check` passes 205 tests in 14 files;
   `npm run build` and `npm run demo` pass. Native fact cards rank literal source
   clauses and require a separate strict Jev publication gate. An isolated real

@@ -10,16 +10,20 @@ globalThis.fetch = async (input, init) => {
   const provider = url.hostname === 'api.typesafe.ai' ? 'jev' : url.hostname === 'api.exa.ai' ? 'exa' : url.pathname === '/v1/turns' ? 'qm' : undefined;
   if (!provider) return original(input, init);
   const id = ++sequence; const start = Date.now();
-  let phase = provider; let tentative = false;
+  let phase = provider; let tentative = false; let publicCards;
   if (provider === 'jev') {
     try {
       const body = JSON.parse(init?.body || '{}');
       const kinds = body.state?.candidates?.map(candidate => candidate.payload?.kind) || [];
       phase = kinds.includes('research') ? 'jev_lookup' : kinds.includes('cue') ? 'jev_cue_authorize' : 'jev_rank';
       tentative = Object.values(body.questions || {}).some(question => /tentative partial speech/.test(question.instructions || ''));
+      if (process.env.GLANCE_PROVIDER_PUBLIC_CARD_TRACE === 'true') {
+        const external = new Map((body.state?.snapshot?.evidence || []).filter(source => source.kind === 'external' && source.url).map(source => [source.id, source]));
+        publicCards = (body.state?.candidates || []).filter(candidate => candidate.id === 'fact_card' && candidate.payload?.kind === 'cue' && candidate.payload.evidenceIds?.length && candidate.payload.evidenceIds.every(id => external.has(id))).map(candidate => ({ text: candidate.payload.text, sourceURLs: candidate.payload.evidenceIds.map(id => external.get(id).url) }));
+      }
     } catch {}
   }
-  log({ id, provider, phase, tentative, event: 'start', at: start });
+  log({ id, provider, phase, tentative, event: 'start', at: start, ...(publicCards?.length ? { publicCards } : {}) });
   try {
     const response = await original(input, init);
     const bytes = await response.clone().arrayBuffer();
