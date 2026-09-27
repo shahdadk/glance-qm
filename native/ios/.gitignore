@@ -1,0 +1,6 @@
+MetaWearablesDAT/
+DerivedData/
+evidence/
+*.xcuserstate
+xcuserdata/
+Local.xcconfig
