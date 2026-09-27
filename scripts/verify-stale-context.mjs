@@ -19,6 +19,8 @@ Object.assign(env, parseEnv(readFileSync(join(config, 'exa.env'), 'utf8')), { GL
 const providers = createAmbientProviders(env);
 const controller = new MeetingController({ directory, providers });
 const record = JSON.parse(readFileSync(process.env.GLANCE_CONTEXT_SNAPSHOT, 'utf8'));
+const expectedFirstKind = process.env.GLANCE_EXPECT_FIRST_KIND || 'research';
+if (!['research', 'cue'].includes(expectedFirstKind)) throw new Error('GLANCE_EXPECT_FIRST_KIND must be research or cue.');
 record.id = `isolated-stale-context-${Date.now()}`;
 const input = controller.input(record);
 const signal = AbortSignal.timeout(15000);
@@ -26,7 +28,7 @@ let report;
 try {
  const first = await providers.judge(input, signal);
  const authorized = Boolean(first.authorization?.verify(input));
- report = { firstKind: first.kind, authorized, oldSourceCount: input.evidence.filter(e=>e.kind==='external').length, passed: first.kind === 'research' && authorized };
+ report = { scope: 'Read-only provider evaluation of a captured room snapshot in an isolated meeting identity; transcript and timestamps preserved.', expectedFirstKind, firstKind: first.kind, authorized, oldSourceCount: input.evidence.filter(e=>e.kind==='external').length, ...(first.kind === 'cue' ? { cue: first.text } : {}), ...(first.kind === 'quiet' ? { reason: first.reason } : {}), passed: first.kind === expectedFirstKind && authorized };
  if (first.kind === 'research' && authorized) {
   const fresh = await providers.research(first.query, signal);
   const next = { ...input, evidence: [...input.evidence.filter(e=>e.kind!=='external'), ...fresh] };

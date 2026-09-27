@@ -52,13 +52,37 @@ describe('native instant context', () => {
     expect(await tryInstantContext(fixture.gate, input('Cosa from Liquid Energy.'), signal())).toMatchObject({kind:'research',query:'Liquid Energy official company technology'});
     expect(await tryInstantContext(fixture.gate, input("I'm marisol vega from northstar labs."), signal())).toMatchObject({kind:'research',query:'marisol vega, northstar labs official company technology'});
   });
-  it('retains an introduction through short fillers but expires after twenty seconds', async () => {
+  it('retains an introduction through short fillers but expires after sixty seconds', async () => {
     const fixture = gate(); const current=input('Cosa from Liquid Energy.');
     current.recentTranscript.push({id:'filler',revision:0,isFinal:true,text:'Um.',capturedAt:'2026-09-27T00:00:15Z'});
     current.evidence.push({id:'transcript:filler:0',kind:'transcript',text:'Um.',label:'Transcript'});
     expect(await tryInstantContext(fixture.gate,current,signal())).toMatchObject({kind:'research',query:'Liquid Energy official company technology',evidenceIds:['transcript:s1:0']});
-    current.recentTranscript[1]!.capturedAt='2026-09-27T00:00:21Z';
+    current.recentTranscript[1]!.capturedAt='2026-09-27T00:01:01Z';
     expect(await tryInstantContext(fixture.gate,current,signal())).toBeUndefined();
+  });
+  it('handles a later company-affiliation question after the earlier introduction expires', async () => {
+    const fixture=gate(); const current=input('from liquid energy');
+    current.evidence.push({id:'exa:company',kind:'external',label:'Liquid Energy',url:'https://liquidenergy.world/about',text:'Liquid Energy builds modular compute systems. We develop industrial cooling systems.'});
+    const first=await tryInstantContext(fixture.gate,current,signal());
+    expect(first).toMatchObject({kind:'cue'});
+    const text='What company are you with liquid energy?';
+    expect(instantIdentitySpans(text)).toEqual(['from liquid energy']);
+    current.recentTranscript.push({id:'later',revision:0,isFinal:true,text,capturedAt:'2026-09-27T00:01:05Z'});
+    current.evidence.push({id:'transcript:later:0',kind:'transcript',text,label:'Transcript'});
+    const later=await tryInstantContext(fixture.gate,current,signal());
+    expect(later).toMatchObject({kind:'cue',text:'Possible match: Liquid Energy — company claims\n• Builds modular compute systems\n• Develop industrial cooling systems'});
+    expect(later?.authorization?.verify(current)).toBe(true);
+    expect(instantIdentitySpans('He is the director of Northstar Labs.')).toEqual(['from Northstar Labs']);
+  });
+  it('retains a company topic through a 36-second filler but lets a held old topic yield to general judgment', async () => {
+    const current=input('What company are you with liquid energy?');
+    current.recentTranscript.push({id:'filler',revision:0,isFinal:true,text:'That’s',capturedAt:'2026-09-27T00:00:36Z'});
+    current.evidence.push({id:'transcript:filler:0',kind:'transcript',text:'That’s',label:'Transcript'});
+    const selected=await tryInstantContext(gate().gate,current,signal());
+    expect(selected).toMatchObject({kind:'research',query:'liquid energy official company technology',evidenceIds:['transcript:s1:0']});
+    const changed=structuredClone(current); changed.recentTranscript[1]!.text='Stop that company lookup. Prepare a PRD instead.';
+    changed.evidence[1]!.text=changed.recentTranscript[1]!.text;
+    expect(await tryInstantContext(gate(true).gate,changed,signal())).toBeUndefined();
   });
   it('holds when Jev rejects an enumerated span; regex does not authorize research', async () => {
     const fixture = gate(true);
