@@ -114,7 +114,7 @@ describe('native instant context', () => {
     expect(result?.authorization?.verify(current)).toBe(true);
     const changed=structuredClone(current);changed.evidence[1]!.text='Changed previous source';
     expect(result?.authorization?.verify(changed)).toBe(false);
-    expect(fixture.batch).toHaveBeenCalledTimes(2);
+    expect(fixture.batch).toHaveBeenCalledTimes(1);
   });
   it('prefers the last repeated introduction and lets Jev validate an ASR spelling variant', async () => {
     const fixture = gate(); const current = input("Hi, I'm Gary Tatten. Let me try that again. I'm Gary Tan.");
