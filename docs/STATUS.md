@@ -41,6 +41,17 @@ Last updated: final integration verification
 
 ## Verification evidence
 
+- On 2026-09-27 at 23:38:22Z, the installed native card rendered sourced Liquid
+  Energy background from previously captured real speech. After the stale-source
+  fix, the existing Pause control reprocessed that speech while capture stayed
+  stopped; transcript contents were unchanged. New Exa research and Jev cue
+  receipts preceded the successful native Display send. Wearer Start at
+  23:38:35Z was followed by another card at 23:38:36Z; Details at 23:38:38Z
+  opened “Why this cue 1/12”, and Done at 23:38:42Z returned to kompX.
+  Native card delivery and wearer interaction are verified. Maintenance and
+  manual reprocessing were involved, so this is not an immediate speech-to-lens
+  latency measurement or a claim of sustained background reliability.
+
 - Physical speech exposed two further defects: clipped/lowercase company
   mentions missed the accelerated lookup, and a QM judgment returned the
   preceding summary's JSON shape because both roles shared one conversation.
@@ -79,8 +90,9 @@ Last updated: final integration verification
   the replacement HTTPS tunnel are verified, including authenticated snapshot
   readback. GBrain and QM are restored; authenticated access to the original QM
   project and an actual `QM_LIVE_OK` model completion both pass. Configured
-  provider labels alone do not establish service connectivity. No new physical Display or sustained
-  background Speech success is claimed.
+  provider labels alone do not establish service connectivity. The later native
+  card rehearsal above verifies delivery; sustained background Speech remains
+  a separate limit.
 
 - `npm run check`: both TypeScript projects and the current full test suite pass.
 - `npm run build`: production web bundle builds successfully.
@@ -98,8 +110,8 @@ mock, or a provider configuration file is reported as such and does not count.
 
 ## Remaining limits and next checks
 
-1. Verify sustained background Speech transcription and full Display updates on
-   the physical glasses with the latest installed source.
+1. Verify sustained background Speech transcription and Display behavior beyond
+   the successful contextual card and Details/Done interaction above.
 2. Rehearse the universal ambient flow and its meeting demonstration with two
    participants, recording only sanitized receipts.
 3. If the operator chooses to send an invitation or document, verify the exact
