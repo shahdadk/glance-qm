@@ -1,12 +1,14 @@
 # kompX
 
-kompX is an ambient Jarvis-style meeting companion for Meta glasses. Its
-native iOS bridge pairs once with the glasses, keeps a meeting transcript
-active, uses grounded context to decide when a short lens cue is useful, and
-turns the meeting's decisions into shared QM work. The phone/browser companion
-is a debugging and shared-room surface; it is not the glasses experience.
-GBrain provides durable meeting memory. Memorable preserves successful
-workflows after the core task path completes.
+kompX is an ambient Jarvis-style context interface for Meta glasses. Its
+native iOS bridge pairs once with the glasses, keeps spoken context active,
+and turns useful moments into quiet lens cues or contextual action cards. A
+meeting is the strongest demonstration, but the product boundary is broader:
+kompX can recall, research, draft, summarize, and stage a deliberate delivery
+from whatever the wearer is discussing. The phone/browser companion is a
+debugging and shared-room surface; it is not the glasses experience. GBrain
+provides durable memory. Memorable preserves successful workflows after the
+core task path completes.
 
 This is a clean-history hackathon repository owned by `shahdadk`. It is
 inspired by the earlier Glance work, but it is an independent implementation.
@@ -15,15 +17,18 @@ integration status.
 
 ## Current state
 
-The backend, ambient controller, QM/GBrain/Memorable adapters, web companion,
-and native iOS bridge are implemented. QM is live verified through the
-connected verifier, self-hosted GBrain has live OAuth MCP read/write with
-keyword search, and Memorable has a live workflow save/readback. Google
-Calendar OAuth read and exact preview verification pass; no invitation has
-been sent. Jev is code- and fixture-verified but remains blocked on a live
-credential. The native app is installed and registered, but a real glasses
-connection is still unverified. A local fixture or export does not count as a
-live integration receipt.
+The backend, ambient controller, QM/GBrain/Memorable/Exa adapters, web
+companion, and native iOS bridge are implemented. QM is live verified through
+the connected verifier, self-hosted GBrain has live OAuth MCP read/write with
+keyword search, Memorable has live workflow save/readback, and Exa research
+has live four-source retrieval plus an end-to-end PRD research path. Jev has a
+live adapter/gate probe and core Jev-native verification. Google Calendar OAuth
+read and exact preview verification pass; no invitation has been sent. Gmail
+document delivery is preview- and duplicate-safe, but no email has been sent.
+The native app is signed, installed, and registered; one nonempty physical
+Speech result reached the backend with HTTP 200. Sustained background speech
+and full glasses Display rehearsal remain unverified. A local fixture or export
+does not count as a live integration receipt.
 
 ## Quick start
 
@@ -49,15 +54,15 @@ or generated private briefs in Git.
 
 ## Product loop
 
-1. A participant starts one shared QM meeting and pairs the native bridge once.
-2. Meta Speech supplies partial and final transcript segments continuously.
-3. While listening, the lens stays quiet unless a grounded cue is useful; it
-   can show a cue, task, summary, or exact action preview.
-4. Participants see the same context, corrections, and QM work through the
-   shared room. The companion supports diagnosis and rehearsal.
-5. Ending the meeting saves an attributed summary and starts the agreed
-   document task. A calendar invitation remains a preview until an exact
-   proposal is confirmed.
+1. The wearer starts kompX and pairs the native bridge once.
+2. Meta Speech supplies partial and final transcript segments as context.
+3. While listening, the lens stays quiet unless a grounded cue is useful; a
+   contextual card can show a cue, research result, draft/task, summary, or
+   exact delivery preview.
+4. A meeting can share the same context and QM work with another participant;
+   the companion supports diagnosis and rehearsal.
+5. A delivery or calendar action remains a preview until the exact artifact,
+   recipient, and current context are confirmed.
 
 The public boundary for this loop is defined in
 [`src/shared/contracts.ts`](src/shared/contracts.ts).
@@ -65,10 +70,10 @@ The public boundary for this loop is defined in
 ## Verification
 
 Run `npm run check`, `npm run build`, and `npm run demo` after core changes.
-The current source verification covers both TypeScript projects and 84 tests;
-the connected verifier covers QM, GBrain, Memorable, calendar preview, and
-recovery behavior. Before submission, rehearse the native glasses path with
-continuous transcript, one relevant memory-backed cue, a correction that
-invalidates stale work, summary persistence, document creation, and one
-confirmed calendar invitation without duplicates. Record the actual outcome in
+The current source verification covers both TypeScript projects and the full
+focused test suite; connected verification covers QM, GBrain, Memorable, Exa,
+Jev-native selection, calendar preview, and delivery safeguards. Before
+submission, rehearse the native glasses path with a nonempty transcript,
+useful context card, correction invalidation, summary/document work, and an
+exact delivery preview. Record the actual outcome in
 [`docs/STATUS.md`](docs/STATUS.md).

@@ -46,6 +46,8 @@ if (!existsSync(join(source, '.git'))) {
 }
 const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: source, encoding: 'utf8' }).stdout?.trim();
 if (head !== commit) throw new Error('Existing QM checkout is at a different commit. Set QM_SOURCE_DIR to a fresh directory; existing files were preserved.');
+const trackedChanges = spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: source, encoding: 'utf8' });
+if (trackedChanges.status !== 0 || trackedChanges.stdout.trim()) throw new Error('QM checkout has tracked changes. Preserve the live checkout and choose a fresh QM_SOURCE_DIR; bootstrap will not accept hidden patches or discard your changes.');
 const npmVersion = spawnSync('npm', ['-v'], { env, encoding: 'utf8' }).stdout?.trim() || '0';
 if (Number(npmVersion.split('.')[0]) < 11 || (Number(npmVersion.split('.')[0]) === 11 && Number(npmVersion.split('.')[1]) < 10)) throw new Error('npm>=11.10 is required.');
 const settings = {
@@ -69,7 +71,7 @@ if (spawnSync('docker', ['info'], { env, stdio: 'ignore' }).status !== 0) {
   if (process.platform !== 'darwin') throw new Error('Start the Docker daemon, then retry.');
   run('colima', ['start', 'glance-qm', '--cpu', '4', '--memory', '6', '--disk', '20', '--root-disk', '12', '--vm-type', 'vz', '--activate=false', '--ssh-config=false']);
 }
-if (!existsSync(join(source, 'node_modules/.package-lock.json'))) run('npm', ['ci', '--no-audit', '--no-fund']);
+run('npm', ['ci', '--no-audit', '--no-fund']);
 run('bash', [join(root, 'scripts/qm-build-sandbox.sh')]);
 console.log(`Prepared QM ${commit}; source: ${source}; private configuration: ${envPath}`);
 if (start) {

@@ -6,6 +6,8 @@ type ProceduralMemoryEnvironment = Readonly<Record<string, string | undefined>>;
 export interface ProceduralMemory {
   /** Returns a bounded, explicitly untrusted reference block, or undefined on a miss/failure. */
   recallSummary(signal?: AbortSignal): Promise<string | undefined>;
+  /** Uses a fixed abstract query, never conversation text or task contents. */
+  recallDocument(signal?: AbortSignal): Promise<string | undefined>;
   /** Records a provider-verified summary workflow; the returned detail is never a fake receipt. */
   recordSummary(sessionId: string, signal?: AbortSignal): Promise<string>;
 }
@@ -85,6 +87,14 @@ export function createProceduralMemory(env: ProceduralMemoryEnvironment = proces
       } catch {
         return undefined;
       }
+    },
+
+    async recallDocument(signal?: AbortSignal): Promise<string | undefined> {
+      if (!client || signal?.aborted) return undefined;
+      try {
+        const result = await client.recall('create document', signal);
+        return result.status === 'found' ? untrustedReference(result.procedure) : undefined;
+      } catch { return undefined; }
     },
 
     async recordSummary(sessionId: string, signal?: AbortSignal): Promise<string> {

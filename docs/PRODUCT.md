@@ -2,19 +2,21 @@
 
 ## Promise
 
-kompX quietly helps a live meeting from Meta glasses. It listens to the
-conversation continuously, surfaces a useful fact or next step only when the
-context supports it, and turns agreed work into a shared QM project that
-participants can inspect and correct.
+kompX quietly helps with whatever the wearer is doing from Meta glasses. It
+listens to spoken context continuously, surfaces a useful fact or next step
+only when the context supports it, and turns agreed work into inspectable QM
+artifacts. Meetings are the first complete demonstration, not the boundary of
+the product.
 
 ## Primary demonstration
 
-Two people share one QM meeting. One person speaks about a decision or an
-open question. The glasses continue showing a small listening state and then a
-brief cue backed by transcript or GBrain evidence. A participant corrects the
-conversation; the prior cue is invalidated. When the meeting ends, QM saves a
-summary, begins the agreed brief, and prepares a calendar invitation. The
-invitation is sent only after an exact preview is confirmed.
+Two people share one QM context. One person speaks about a decision, question,
+or work item. The glasses stay quiet while listening and then show a brief cue
+or contextual card backed by transcript, GBrain, or Exa evidence. A participant
+corrects the context; stale work is held for review. The assistant can draft a
+brief, save a summary, and prepare a calendar or document delivery preview.
+External actions happen only after the exact artifact, recipient, and current
+context are confirmed.
 
 ## Interaction principles
 
@@ -24,15 +26,18 @@ invitation is sent only after an exact preview is confirmed.
 - A correction changes the context revision and makes stale proposals unsafe.
 - Participants share the same durable work and can see who produced it.
 - External actions are inspectable and require explicit confirmation.
+- The primary interaction is start/pause plus contextual cards; the product
+  does not depend on a dashboard, menu, or persistent task list.
 
 ## In scope for the hackathon
 
-- A shared meeting and participant identity in QM.
+- A shared ambient context and participant identity in QM, demonstrated with a
+  meeting.
 - Partial and final transcript transport from the Meta surface.
 - Ambient cue decisions with transcript and GBrain memory evidence.
 - Persisted summary and a single follow-up document task.
-- Calendar invitation preview and confirmed send through a supported connector.
-- One Memorable workflow record/retrieval pass if the core rehearsal passes.
+- Calendar and document-delivery previews with exact confirmation gates.
+- Memorable workflow record/retrieval and Exa public research with provenance.
 
 ## Out of scope
 

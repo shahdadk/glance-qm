@@ -49,8 +49,39 @@ quiet listening state, useful cues, tasks, summaries, and exact action
 previews. The browser/mobile companion supports debugging and shared-room
 rehearsal; it does not claim device delivery.
 
-Status: the native app is installed and registered. A real glasses connection
-and sustained device transcript/display rehearsal remain unverified.
+Status: signed build and native tests pass; the physical Speech path produced a
+nonempty final transcript that reached the backend with HTTP 200. Sustained
+background capture and full Display rehearsal remain unverified. The latest
+source layout is documented separately from the installed build.
+
+## Exa
+
+Exa is the only public web-research provider. The server sends a short,
+standalone public topic and returns up to four bounded, attributed sources.
+Private transcript text, names, identifiers, URLs, and credentials are blocked
+at the query boundary. GBrain remains the source for private/project memory.
+
+Status: live adapter and factory retrieval passed with four real sources, and
+the core's research-first PRD path was live verified. There is no silent search
+fallback.
+
+## Jev
+
+Jev is an optional semantic selection gate after QM produces a bounded typed
+candidate set. Receipts are verified against the current context immediately
+before the core applies a judgment; a hold, timeout, changed context, or
+invalid response produces no action.
+
+Status: live adapter/gate probes and Jev-native core verification passed. QM
+remains the default mode when `GLANCE_DECISION_MODE=qm`; Jev remains an
+optional decision mode and never authorizes an external action by itself.
+
+## Calendar and document delivery
+
+Calendar OAuth read and exact preview verification pass; no invitation has been
+sent. The Gmail document-delivery adapter binds the reviewed artifact digest,
+generation, context, recipient, and proposal version, records uncertain sends,
+and refuses automatic retries. No email has been sent during QA.
 
 ## River AI and other sponsors
 

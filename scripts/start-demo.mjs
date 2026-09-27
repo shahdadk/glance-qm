@@ -15,7 +15,7 @@ chmodSync(localDir, 0o700);
 const stateFile = join(localDir, 'demo-processes.json');
 const logFile = join(localDir, 'demo-backend.log');
 const node = process.env.QM_NODE_BIN || ['/opt/homebrew/opt/node@24/bin/node', '/usr/local/opt/node@24/bin/node'].find(existsSync) || process.execPath;
-const allowed = new Set(`PATH HOME TMPDIR LANG LC_ALL TZ USER LOGNAME SHELL NODE_EXTRA_CA_CERTS PORT HOST WEB_PORT GLANCE_LOCAL_DIR GLANCE_OPERATOR_TOKEN GLANCE_ALLOWED_ORIGINS GLANCE_DECISION_MODE QM_BASE_URL QM_SOURCE_SECRET QM_SIGNING_SECRET CORE_SIGNING_SECRET QM_PROJECT_ID QM_THREAD_REF QM_ACTOR_EXTERNAL_ID QM_PRINCIPAL_ID QM_ACTOR_DISPLAY_NAME QM_ACTOR_EMAIL QM_MODEL QM_HARNESS QM_THINKING_LEVEL QM_JUDGE_MODEL QM_JUDGE_THINKING_LEVEL QM_JUDGE_FAST_MODE QM_CONNECTION_FILE QM_RUNTIME_ENV GBRAIN_CONFIG_FILE GBRAIN_MCP_URL GBRAIN_BASE_URL GBRAIN_CLIENT_ID GBRAIN_CLIENT_SECRET GBRAIN_TOKEN_URL GBRAIN_RECALL_TOOL GBRAIN_SAVE_SUMMARY_TOOL GBRAIN_GET_PAGE_TOOL GBRAIN_AUTH_MODE GBRAIN_BEARER_TOKEN GBRAIN_API_TOKEN MEMORABLE_API_KEY MEMORABLE_BIN MEMORABLE_HOME MEMORABLE_BASE_URL MEMORABLE_API_TOKEN MEMORABLE_CONFIG_FILE GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REFRESH_TOKEN GOOGLE_ACCESS_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN GOOGLE_CALENDAR_ID GOOGLE_OAUTH_CONFIG_FILE GOOGLE_WORKSPACE_CLI_CONFIG_DIR GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE JEV_API_KEY TYPESAFE_API_KEY JEV_MODEL JEV_BASE_URL`.split(' '));
+const allowed = new Set(`PATH HOME TMPDIR LANG LC_ALL TZ USER LOGNAME SHELL NODE_EXTRA_CA_CERTS PORT HOST WEB_PORT GLANCE_LOCAL_DIR GLANCE_OPERATOR_TOKEN GLANCE_ALLOWED_ORIGINS GLANCE_DECISION_MODE GLANCE_AMBIENT_DEBOUNCE_MS QM_BASE_URL QM_SOURCE_SECRET QM_SIGNING_SECRET CORE_SIGNING_SECRET QM_PROJECT_ID QM_THREAD_REF QM_ACTOR_EXTERNAL_ID QM_PRINCIPAL_ID QM_ACTOR_DISPLAY_NAME QM_ACTOR_EMAIL QM_MODEL QM_HARNESS QM_THINKING_LEVEL QM_JUDGE_MODEL QM_JUDGE_THINKING_LEVEL QM_JUDGE_FAST_MODE QM_CONNECTION_FILE QM_RUNTIME_ENV GBRAIN_CONFIG_FILE GBRAIN_MCP_URL GBRAIN_BASE_URL GBRAIN_CLIENT_ID GBRAIN_CLIENT_SECRET GBRAIN_TOKEN_URL GBRAIN_RECALL_TOOL GBRAIN_SAVE_SUMMARY_TOOL GBRAIN_GET_PAGE_TOOL GBRAIN_AUTH_MODE GBRAIN_BEARER_TOKEN GBRAIN_API_TOKEN MEMORABLE_API_KEY MEMORABLE_BIN MEMORABLE_HOME MEMORABLE_BASE_URL MEMORABLE_API_TOKEN MEMORABLE_CONFIG_FILE GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REFRESH_TOKEN GOOGLE_OAUTH_SCOPES GOOGLE_GMAIL_FROM_EMAIL GOOGLE_ACCESS_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN GOOGLE_CALENDAR_ID GOOGLE_OAUTH_CONFIG_FILE GOOGLE_WORKSPACE_CLI_CONFIG_DIR GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE EXA_API_KEY JEV_API_KEY TYPESAFE_API_KEY JEV_MODEL JEV_BASE_URL`.split(' '));
 const env = {};
 function merge(source) {
   for (const [key, value] of Object.entries(source)) if (allowed.has(key) && typeof value === 'string' && value.trim()) env[key] = value;
@@ -31,13 +31,16 @@ const runtimePath = process.env.QM_RUNTIME_ENV || join(configDir, 'runtime.env')
 const runtime = envFile(runtimePath);
 const connectionPath = process.env.QM_CONNECTION_FILE || join(configDir, 'connection.json');
 const connection = existsSync(connectionPath) ? jsonFile(connectionPath) : {};
-merge({ HOME: homedir(), PATH: `${dirname(node)}:${process.env.PATH || '/usr/bin:/bin'}`, PORT: '8790', WEB_PORT: '5174', HOST: '0.0.0.0', GLANCE_LOCAL_DIR: localDir,
+merge({ HOME: homedir(), PATH: `${dirname(node)}:${process.env.PATH || '/usr/bin:/bin'}`, PORT: '8790', WEB_PORT: '5174', HOST: '0.0.0.0', GLANCE_DECISION_MODE: 'jev-native', GLANCE_LOCAL_DIR: localDir,
   QM_JUDGE_MODEL: 'gpt-6-luna', QM_JUDGE_THINKING_LEVEL: 'low', QM_JUDGE_FAST_MODE: 'true', QM_BASE_URL: connection.baseUrl, QM_SOURCE_SECRET: runtime.CORE_SIGNING_SECRET, QM_PROJECT_ID: connection.projectId, QM_THREAD_REF: connection.threadRef, QM_ACTOR_EXTERNAL_ID: connection.principalIds?.[0], QM_MODEL: runtime.CODEX_MODEL, QM_HARNESS: runtime.HARNESS,
   MEMORABLE_BIN: existsSync(join(configDir, 'tools/node_modules/.bin/memorable')) ? join(configDir, 'tools/node_modules/.bin/memorable') : undefined, GBRAIN_RECALL_TOOL: 'search', GBRAIN_SAVE_SUMMARY_TOOL: 'put_page', GBRAIN_GET_PAGE_TOOL: 'get_page', GBRAIN_CONFIG_FILE: join(homedir(), '.local/share/glance-qm/gbrain-runtime/backend-oauth.json'), GOOGLE_WORKSPACE_CLI_CONFIG_DIR: join(configDir, 'gws') });
-for (const path of [join(configDir, 'memorable.env'), join(configDir, 'google.env'), join(configDir, 'jev.env'), join(configDir, 'demo.env'), join(root, '.env')]) merge(envFile(path));
+for (const path of [join(configDir, 'memorable.env'), join(configDir, 'google.env'), join(configDir, 'jev.env'), join(configDir, 'exa.env'), join(configDir, 'demo.env'), join(root, '.env')]) merge(envFile(path));
 merge(process.env);
 if (process.env.GLANCE_USE_GOOGLE_SHELL_ENV !== '1') merge(envFile(join(configDir, 'google.env')));
+if (process.env.GLANCE_USE_EXA_SHELL_ENV !== '1') merge(envFile(join(configDir, 'exa.env')));
+if (process.env.GLANCE_USE_JEV_SHELL_ENV !== '1') merge(envFile(join(configDir, 'jev.env')));
 env.GLANCE_LOCAL_DIR = localDir;
+if (['jev-native', 'jev'].includes(env.GLANCE_DECISION_MODE) && !env.JEV_API_KEY && !env.TYPESAFE_API_KEY) throw new Error('Native Jev decision mode requires an authorized private Jev credential; no QM-only fallback is allowed.');
 if (env.CORE_SIGNING_SECRET && !env.QM_SOURCE_SECRET) env.QM_SOURCE_SECRET = env.CORE_SIGNING_SECRET;
 const port = Number(env.PORT), webPort = Number(env.WEB_PORT);
 if (![port, webPort].every(value => Number.isInteger(value) && value > 1024 && value < 65536) || port === 8787 || port === webPort) throw new Error('Choose distinct nonprivileged demo ports; existing Glance port 8787 is reserved.');
@@ -45,8 +48,9 @@ if (!['0.0.0.0', '127.0.0.1', 'localhost'].includes(env.HOST)) throw new Error('
 const loopback = `http://127.0.0.1:${port}`;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const owned = [];
+const preserved = [];
 function identity(pid) { const r = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], { encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : ''; }
-function saveState(extra = {}) { privateWrite(stateFile, JSON.stringify({ version: 1, root, localDir, processes: owned, ...extra }, null, 2) + '\n'); }
+function saveState(extra = {}) { privateWrite(stateFile, JSON.stringify({ version: 1, root, localDir, processes: [...preserved, ...owned], ...extra }, null, 2) + '\n'); }
 async function fetchLocal(path, options = {}) { return fetch(`${loopback}${path}`, { ...options, signal: AbortSignal.timeout(2000), redirect: 'error' }); }
 async function healthy() { try { const r = await fetchLocal('/api/health'); const data = await r.json(); return r.ok && data.service === 'glance-qm' && data.ok === true ? data : null; } catch { return null; } }
 async function authCheck() {
@@ -100,13 +104,20 @@ function report(data, tokenPath, pairingPath) {
   console.log(`Backend: ${loopback}`);
   const candidates = Object.entries(networkInterfaces()).flatMap(([name, values]) => (values || []).filter(address => address.family === 'IPv4' && !address.internal && /^(en|eth|wlan)/.test(name)).map(address => address.address));
   const ip = process.env.GLANCE_LAN_IP || candidates[0];
-  const nativeURL = env.HOST === '0.0.0.0' && ip ? `http://${ip}:${port}` : loopback;
-  if (env.HOST === '0.0.0.0' && ip) console.log(`Native LAN: ${nativeURL}`);
+  let nativeURL = env.HOST === '0.0.0.0' && ip ? `http://${ip}:${port}` : loopback;
+  const tunnelPath = join(localDir, 'tunnel.json');
+  if (existsSync(tunnelPath)) {
+    const tunnel = jsonFile(tunnelPath);
+    if (tunnel.verifiedAt && /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(tunnel.url || '') && identity(tunnel.pid) === tunnel.identity) {
+      nativeURL = tunnel.url; console.log(`Native HTTPS: ${nativeURL}`);
+    }
+  }
+  if (env.HOST === '0.0.0.0' && ip) console.log(`Native LAN: http://${ip}:${port}`);
   else console.log('Native LAN unavailable; select an active LAN interface and HOST=0.0.0.0.');
   privateWrite(pairingPath, JSON.stringify({ serverURL: nativeURL, operatorToken: env.GLANCE_OPERATOR_TOKEN }, null, 2) + '\n');
   console.log(`Operator token file: ${tokenPath}`);
   console.log(`Private native pairing file: ${pairingPath}`);
-  console.log(`Provider mode: ${data.providerMode}; QM/GBrain readiness verified. Optional providers require their own live checks.`);
+  console.log(`Provider mode: ${data.providerMode}; decision mode: ${data.decisionMode}; QM/GBrain readiness verified. Provider actions require completed live receipts.`);
 }
 try {
   const checkFd = openSync(join(localDir, 'demo-typecheck.log'), 'w', 0o600); chmodSync(join(localDir, 'demo-typecheck.log'), 0o600);
@@ -130,7 +141,8 @@ try {
     if (previous.configHash !== configHash) throw new Error('Demo configuration changed. Run stop-demo.mjs, then start-demo.mjs to load it.');
     await authCheck(); report(current, tokenPath, join(localDir, 'pairing.json'));
   } else {
-    if (previous?.processes?.some(record => identity(record.pid) === record.identity)) throw new Error('An owned demo process is running but unhealthy. Stop it with stop-demo.mjs before restarting.');
+    if (previous?.processes?.some(record => record.name === 'backend' && identity(record.pid) === record.identity)) throw new Error('An owned demo process is running but unhealthy. Stop it with stop-demo.mjs before restarting.');
+    preserved.push(...(previous?.processes || []).filter(record => record.name !== 'backend' && identity(record.pid) === record.identity));
     const probe = launch('backend', ['--import', 'tsx', join(root, 'src/server/index.ts')], { ...env, HOST: '127.0.0.1', GLANCE_LOCAL_DIR: join(localDir, 'launcher-auth-probe') });
     await waitBackend(probe); await authCheck();
     await terminate(probe); owned.splice(owned.indexOf(probe), 1); saveState();

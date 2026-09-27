@@ -59,3 +59,19 @@ The ambient bundle supports `GLANCE_DECISION_MODE=jev`: QM proposes a bounded se
 After the controlled backend restart, the actual application completed summary persistence for live QA meeting `cc843140-643d-427d-8556-67d0b7939bb4`: GBrain receipt `56ff81c1-67ba-445c-8968-cd5a878b1114`, with canonical readback and an automatic Memorable saved-procedure detail. This resolves the earlier old-process persistence failure; it is a real provider execution using an explicitly labeled QA meeting.
 
 The final connected verifier then passed 14/14 checks in 61.296 seconds, including actual QM document completion. Calendar was cancelled rather than sent. Recorded Luna judge traces were approximately 2.6–3.7 seconds. See `docs/VERIFICATION.md` for the sanitized application receipts.
+
+## Continuous useful assistance
+
+kompX is prompted as an always-worn context assistant. The semantic judge prefers a meaningful implication, exact calculation, relevant recalled constraint, or useful agreed artifact; it stays quiet for repetition or uninformative commentary. A grounded present need for internal work can produce an agent task while listening, without a wake word, formal command, or End. Explicit withdrawal produces a source-grounded `cancel_task` for an existing task ID. External delivery remains separate.
+
+Before drafting, the provider reads source-scoped GBrain context and asks Memorable only the abstract query `create document`. Original evidence text wins any duplicate ID, new retrieved evidence is returned to core for provenance, and unknown requirements remain explicitly unresolved. Product/requirements drafts organize supported goals, users, problem, scope, non-goals, requirements, acceptance criteria, risks, and questions; other artifacts use an appropriate structure. This is prompt-based semantic judgment, not keyword routing.
+
+Live labeled semantic QA on 2026-09-27: a clear shared need during conversation produced `assignedTo=agent`, `assignmentBasis=agreed_shared_work` with exact source IDs (QM run `22d51605-112b-445b-a083-310ab49323b1`, 4.131s). Its explicit withdrawal produced `cancel_task` for the existing task (run `f85c169d-e422-4bdc-ae0e-76214ce40c30`, 2.130s). Nine ambient fixture tests and both TypeScript projects passed after this update.
+
+## Public research and decision mode
+
+`createAmbientProviders` exposes `research(query, signal)` through `ExaClient` only. Exa supplies attributed external evidence; GBrain supplies private/project history. The judge must request public research before making unsupported public/current factual claims, with only a short standalone public-topic query—not participant names, private project identifiers, emails, URLs, credentials, or copied conversation. Missing/failed Exa remains an explicit failure, with no alternate provider or invented result.
+
+The canonical `GLANCE_DECISION_MODE` values are `qm` and `jev-native`. Legacy `jev` is accepted. An unknown nonempty mode throws a configuration error instead of silently selecting QM.
+
+Validation: both TypeScript projects and 24 focused Exa/ambient tests passed. The real provider factory returned four attributed `nodejs.org` sources in 407ms through Exa on 2026-09-27. This verifies the adapter/factory path; application-level research selection is verified separately by core.

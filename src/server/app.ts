@@ -6,12 +6,14 @@ import { appendTranscriptRequestSchema, confirmActionRequestSchema, createMeetin
 import { DomainError, MeetingController } from '../core/controller.js';
 import { NotFoundError } from '../core/store.js';
 import { validToken } from './auth.js';
+import { installDeliveryRoutes, type DeliveryRouteOptions } from './delivery.js';
 
 export interface AppOptions {
   controller: MeetingController;
   token: string;
   allowedOrigins?: string[];
   memorableConfigured?: boolean;
+  delivery?: DeliveryRouteOptions;
 }
 export function createApp(options: AppOptions): { server: Server; app: express.Express; close: () => Promise<void> } {
   const { controller, token } = options;
@@ -44,10 +46,16 @@ export function createApp(options: AppOptions): { server: Server; app: express.E
   });
   app.post('/api/meetings', async (request, response) => { response.status(201).json(await controller.create(createMeetingRequestSchema.parse(request.body))); });
   app.get('/api/meetings/:id', async (request, response) => { response.json(await controller.get(request.params.id!)); });
+  app.get('/api/meetings/:id/tasks/:taskId', async (request, response) => { response.json(await controller.task(request.params.id!, request.params.taskId!)); });
+  app.post('/api/meetings/:id/tasks/:taskId/cancel', async (request, response) => { response.json(await controller.cancelTask(request.params.id!, request.params.taskId!)); });
+  app.post('/api/meetings/:id/tasks/:taskId/review', async (request, response) => {
+    const body = z.object({ generation: z.number().int().positive(), contextDigest: z.string().regex(/^[a-f0-9]{64}$/) }).parse(request.body);
+    response.json(await controller.reviewTask(request.params.id!, request.params.taskId!, body.generation, body.contextDigest));
+  });
   app.get('/api/meetings/:id/tasks/:taskId/document', async (request, response) => {
     const meeting = await controller.get(request.params.id!);
     const task = meeting.tasks.find(item => item.id === request.params.taskId);
-    if (!task?.content || task.status !== 'completed') throw new DomainError(404, 'document_not_found', 'The document is not available.');
+    if (!task?.content || (task.status !== 'completed' && task.status !== 'review_required')) throw new DomainError(404, 'document_not_found', 'The document is not available.');
     response.setHeader('Content-Disposition', `attachment; filename="${task.id}.md"`);
     response.type('text/markdown').send(task.content);
   });
@@ -56,6 +64,7 @@ export function createApp(options: AppOptions): { server: Server; app: express.E
   app.post('/api/meetings/:id/end', async (request, response) => { response.json(await controller.end(request.params.id!)); });
   app.post('/api/meetings/:id/control', async (request, response) => { const body = z.object({ action: z.enum(['pause', 'resume']) }).parse(request.body); response.json(await controller.control(request.params.id!, body.action)); });
   app.post('/api/meetings/:id/actions/:actionId/confirm', async (request, response) => { const body = confirmActionRequestSchema.parse(request.body); response.json(await controller.confirm(request.params.id!, request.params.actionId!, body.proposalVersion)); });
+  installDeliveryRoutes(app, controller, options.delivery);
   app.use((_request, response) => { response.status(404).json({ error: { code: 'not_found', message: 'Unknown endpoint.' } }); });
   const errors: ErrorRequestHandler = (error: unknown, _request, response, _next) => {
     if (error instanceof ZodError) { response.status(400).json({ error: { code: 'invalid_request', message: 'Request validation failed.', issues: error.issues } }); return; }

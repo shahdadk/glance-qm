@@ -52,7 +52,7 @@ and bootstrap steps described by each integration owner:
 | --- | --- | --- |
 | QM | `yc-software/qm` commit `a5a36675041a85e30b9ff3632f678ba36837aabf` | [QM setup](QM-SETUP.md) |
 | GBrain | `garrytan/gbrain` commit `e78f1c38b947b053f3a46881340f74f316be855a` | [GBrain setup](GBRAIN-SETUP.md) |
-| Meta Device Access Toolkit | Swift package `1.0.0`, revision `1f38beecba83c4c8b5e343540f9cd615323ab19a` | [Meta setup](META-SETUP.md), `native/ios/project.yml`, committed `Package.resolved` |
+| Meta Device Access Toolkit | Swift package `1.0.0`, revision `1f38beecba83c4c8b5e343540f9cd615323ab19a` | [Meta setup](META-SETUP.md), `native/ios/project.yml`, `Package.resolved` (native submission pending at the verified revision below) |
 
 An external checkout is acceptable as a generated cache only when repository
 commands fetch its exact pin and apply every required custom change. Never depend
@@ -68,16 +68,52 @@ remain separate prerequisites. A simulator build is not a glasses receipt.
 
 ## Verification record
 
-On 2026-09-27, the first isolated working-tree source copy passed `npm ci`, strict
-TypeScript checks, test execution, and the Vite production build with Node
-22.15.0. Its `npm run demo` failed because `src/demo.ts` had not yet been supplied
-by the implementation worker. This is an intermediate result, not final acceptance.
+On 2026-09-27, the default verifier passed against committed application revision
+`6f10bb2166f9984ed6a2d997be263b22ed79b5f3`, extracted with `git archive HEAD`.
+It used Node 22.15.0, an empty temporary home directory, no inherited provider
+credentials, and npm's download cache. It did not copy the working tree,
+`node_modules`, external runtime checkouts, databases, or private configuration.
 
-The GBrain owner has added `scripts/bootstrap-gbrain.mjs` and
-`integrations/gbrain/runtime.json` to fetch its exact commit, install with a frozen
-lockfile, and provision its dedicated database and OAuth clients. Its isolated
-fresh-runtime verification is in progress. QM bootstrap is also being implemented;
-consult its setup document for the final command and verification result.
-The final acceptance run must recheck both bootstrap paths and rerun the
-committed-HEAD verifier after all implementation is committed. Runtime receipts in integration
-docs describe actual service checks separately from fixture test results.
+| Check | Result |
+| --- | --- |
+| `npm ci --no-audit --no-fund` | Passed; 209 packages installed from the lockfile |
+| `npm run check` | Passed strict backend/web TypeScript checks and 84 tests in six files |
+| `npm run build` | Passed production Vite build, 39 modules |
+| `npm run demo` | Passed nine explicitly labeled offline fixture checks; zero calendar sends |
+| Local npm dependency/source import checks | Passed |
+
+This validates the committed backend, integration code, fixture rehearsal, and
+web application without the operator's hidden configuration. It does not prove
+provider availability, external side effects, Docker provisioning, or hardware.
+No existing QM, GBrain, backend, web, or device runtime was stopped.
+
+The checked revision contains 73 files and **no native files**. Native source,
+its package lock, and its setup document were still awaiting a separate commit.
+The Meta pin above records the intended native dependency; this application
+verification is not a native clean-clone or hardware pass. Native build and
+device acceptance require their own committed-revision receipt.
+
+A bounded scan of that committed tree found no common credential/private-key
+patterns or committed private-state/generated-output paths. One historical
+absolute workspace path appeared in `docs/JEV.md` only; it is prose, not an
+application dependency. This pattern scan is not a comprehensive secret audit.
+
+The provider bootstrap commands are now repository source:
+
+```sh
+node scripts/qm-bootstrap.mjs --help
+node scripts/bootstrap-gbrain.mjs --dry-run
+```
+
+The GBrain owner separately verified a fresh pinned checkout, dedicated new
+PostgreSQL volume/runtime, scoped OAuth clients, an idempotent rerun, Linux ARM64
+CLI compilation, and authenticated HTTP/MCP initialization. The temporary test
+instance was stopped; the primary runtime was preserved. The QM owner verified
+prepare-only bootstrap against the existing exact source and cached image;
+that is not a separate fresh-machine Docker proof. Consult
+[QM setup](QM-SETUP.md), [GBrain setup](GBRAIN-SETUP.md), and
+[demo startup](RUN-DEMO.md) for prerequisites and commands.
+
+Live-provider receipts in those integration documents remain distinct from the
+application's offline fixture results. Re-run the default verifier after later
+application changes; this receipt attests only the exact revision above.

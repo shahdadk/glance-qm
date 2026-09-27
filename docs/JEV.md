@@ -92,21 +92,23 @@ omit response bodies and network error details.
   Tests cover the exact request shape, all three typed primitives, incomplete
   and malformed answers, unconfigured mode, timeout/abort, HTTP failure,
   candidate mutation, hold, expiry, and receipt tampering.
-- **Not live-verified:** neither `JEV_API_KEY` nor `TYPESAFE_API_KEY` was present
-  in the worker process. The explicitly designated prior Glance
-  `.local/provider.env` contained neither Jev nor TypeSafe variable names.
-  The newer designated `/Users/shahdad/projects/glance` checkout also had no
-  `.local/provider.env`, `.env`, or `.env.local`; its documented runtime's
-  provider env/readiness files were absent. Its README itself labels Jev as
-  unverified. No additional Jev credential binding was found in the inspected
-  provider configuration code.
-  No inference probe was sent with a substitute credential, and no key was
-  copied into this project. A direct TypeSafe key is still required for a tiny
-  inference probe.
-- **Integration:** the gate is a library boundary. Native product behavior also
-  requires the provider candidate-generation path and the core's immediate
-  receipt verification before dispatch. Adapter unit tests alone do not prove
-  an end-to-end native flow.
+- **Live adapter and gate verified, September 27, 2026, 15:24 PDT:** the user
+  supplied a direct Jev key in the designated owner-only
+  `~/.config/glance-qm/jev.env`. Two tiny synthetic requests used the actual
+  adapter and official endpoint with its normal 1500 ms deadline. No key was
+  printed, copied into this repository, or sent to another provider.
+
+  | Actual request | Observed result |
+  | --- | --- |
+  | Batched Choice, Noul and Score | 180 ms; model `jev-1.13.0`; all three typed answers and complete distributions validated. Choice selected `calculate` at probability/confidence 1; Noul returned 0.99; Score returned 2 on a three-level rubric. |
+  | Candidate decision gate | 109 ms; selected `calculate` at probability 0.97 and confidence 0.95; hold probability 0.03. The receipt verified against the original snapshot and rejected a changed snapshot. |
+
+  These are individual observed synthetic probe latencies, not a benchmark or
+  a live meeting rehearsal. The probes produced no external action or artifact.
+- **Integration boundary:** the provider candidate-generation path and core's
+  immediate receipt verification still require their own end-to-end meeting
+  rehearsal. Live adapter success alone does not establish glasses, Exa, QM,
+  calendar, or publication behavior.
 
 The old Glance provider was inspected only for designated configuration names;
 this adapter was implemented from the current official contract. No old

@@ -39,7 +39,7 @@ test('Jev selects the second QM candidate and binds authorization to current con
     if(String(url).includes('async=1'))return new Response(JSON.stringify({runId:'fixture-run'}),{headers:{'content-type':'application/json'}});
     return new Response(`data: ${JSON.stringify({type:'CUSTOM',name:'run',value:{status:'done',result:{status:'ok',reply:JSON.stringify({candidates})}}})}\n\ndata: ${JSON.stringify({type:'RUN_FINISHED'})}\n\n`,{headers:{'content-type':'text/event-stream'}});
   }));
-  const result=await createAmbientProviders({...fixtureEnv,GLANCE_DECISION_MODE:'jev',JEV_API_KEY:'fixture-key'}).judge(fixtureInput,new AbortController().signal);
+  const result=await createAmbientProviders({...fixtureEnv,GLANCE_DECISION_MODE:'jev-native',JEV_API_KEY:'fixture-key'}).judge(fixtureInput,new AbortController().signal);
   expect(result).toMatchObject({kind:'cue',text:'Second cue'});expect(jevCalls).toBe(1);
   expect(result.authorization?.verify({...fixtureInput,anchor:{...fixtureInput.anchor,capturedAt:999}})).toBe(true);
   expect(result.authorization?.verify({...fixtureInput,anchor:{...fixtureInput.anchor,correctionEpoch:1}})).toBe(false);
@@ -49,7 +49,7 @@ test('QM threads separate meetings and document tasks without changing project s
   const requests: Record<string,unknown>[]=[];
   vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
     if(String(url).includes('async=1')){requests.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({runId:'fixture-run'}),{headers:{'content-type':'application/json'}});}
-    const latest=requests.at(-1);const reply=String(latest?.text).startsWith('Prepare')?{content:'# Fixture document',receipt:{id:'invented-receipt'},url:'https://invented.example/doc'}:{kind:'quiet',reason:'Fixture quiet'};
+    const latest=requests.at(-1);const reply=String(latest?.text).includes('TASK_ID=')?{content:'# Fixture document',receipt:{id:'invented-receipt'},url:'https://invented.example/doc'}:{kind:'quiet',reason:'Fixture quiet'};
     return new Response(`data: ${JSON.stringify({type:'CUSTOM',name:'run',value:{status:'done',result:{status:'ok',reply:JSON.stringify(reply)}}})}\n\ndata: ${JSON.stringify({type:'RUN_FINISHED'})}\n\n`,{headers:{'content-type':'text/event-stream'}});
   }));
   const providers=createAmbientProviders(fixtureEnv);const signal=new AbortController().signal;
@@ -72,4 +72,78 @@ test('fast ambient judge configuration does not change the document model',async
   await p.judge(fixtureInput,signal);await p.prepareDocument({id:'fixture-task',meetingId:'fixture-meeting',title:'Fixture',instructions:'Prepare fixture',origin:fixtureInput.anchor,evidence:fixtureInput.evidence},signal);
   expect(requests[0]).toMatchObject({model:'gpt-6-luna',thinkingLevel:'low',fastMode:true,skipMemory:true,readOnly:true});
   expect(requests[1]?.model).toBe('gpt-5.6-sol');expect(requests[1]?.fastMode).not.toBe(true);
+});
+
+test('document preparation retrieves scoped memory and preserves its exact evidence',async()=>{
+  let documentRequest='';
+  vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
+    if(String(url).includes('memory.test')) {
+      const request=JSON.parse(String(init?.body));
+      if(request.method==='notifications/initialized') return new Response(null,{status:202});
+      let result: unknown;
+      if(request.method==='initialize') result={protocolVersion:'2025-03-26'};
+      else if(request.method==='tools/list') result={tools:[{name:'search',inputSchema:{type:'object',properties:{query:{type:'string'},source_id:{type:'string'},limit:{type:'number'}},required:['query','source_id']}}]};
+      else {expect(request.params.arguments.source_id).toBe('glance-demo');result={content:[{type:'text',text:JSON.stringify([
+        {id:'memory-allowed',source_id:'glance-demo',slug:'chan-glance-demo/product',title:'Prior constraint',chunk_text:'The initial experience must work without an account.'},
+        {id:'memory-denied',source_id:'other-source',slug:'private/product',title:'Private',chunk_text:'Must not enter the document.'},
+      ])}]};}
+      return new Response(JSON.stringify({jsonrpc:'2.0',id:request.id,result}),{headers:{'content-type':'application/json'}});
+    }
+    if(String(url).includes('async=1')){documentRequest=JSON.parse(String(init?.body)).text;return new Response(JSON.stringify({runId:'fixture-run'}),{headers:{'content-type':'application/json'}});}
+    return new Response(`data: ${JSON.stringify({type:'CUSTOM',name:'run',value:{status:'done',result:{status:'ok',reply:JSON.stringify({content:'# Grounded draft'})}}})}\n\ndata: ${JSON.stringify({type:'RUN_FINISHED'})}\n\n`,{headers:{'content-type':'text/event-stream'}});
+  }));
+  const providers=createAmbientProviders({...fixtureEnv,GBRAIN_MCP_URL:'https://memory.test/mcp',GBRAIN_BEARER_TOKEN:'fixture',GBRAIN_RECALL_TOOL:'search'});
+  const result=await providers.prepareDocument({id:'task-context',meetingId:'fixture-meeting',title:'Prepare the product specification',instructions:'Turn the agreed needs into a draft',origin:fixtureInput.anchor,evidence:fixtureInput.evidence},new AbortController().signal);
+  expect(documentRequest).toContain('memory-allowed');expect(documentRequest).not.toContain('memory-denied');
+  expect(result.evidence?.map(e=>e.id)).toEqual(['transcript:fixture-segment:1','memory-allowed']);
+  expect(result.receipt.id).toBe('fixture-run');
+});
+
+test('semantic task cancellation requires an existing task and exact source evidence',async()=>{
+  modelReply({kind:'cancel_task',taskId:'invented-task',evidenceIds:['transcript:fixture-segment:1']});
+  await expect(createAmbientProviders(fixtureEnv).judge(fixtureInput,new AbortController().signal)).rejects.toMatchObject({code:'protocol_error'});
+  modelReply({kind:'cancel_task',taskId:'current-task',evidenceIds:['transcript:fixture-segment:1']});
+  const input={...fixtureInput,purpose:'finalization' as const,meeting:{...fixtureInput.meeting,tasks:[{id:'current-task',title:'Current draft',status:'running' as const}]}};
+  await expect(createAmbientProviders(fixtureEnv).judge(input,new AbortController().signal)).resolves.toMatchObject({kind:'cancel_task',taskId:'current-task'});
+});
+
+test('decision modes accept canonical names and the legacy alias but reject unknown modes',()=>{
+  expect(createAmbientProviders({GLANCE_DECISION_MODE:'jev-native'}).decisionMode).toBe('jev-native');
+  expect(createAmbientProviders({GLANCE_DECISION_MODE:'jev'}).decisionMode).toBe('jev-native');
+  expect(createAmbientProviders({GLANCE_DECISION_MODE:'qm'}).decisionMode).toBe('qm-only');
+  expect(()=>createAmbientProviders({GLANCE_DECISION_MODE:'jev-naitve'})).toThrow(/GLANCE_DECISION_MODE must be/);
+});
+
+test('research uses Exa only and returns attributed public source evidence',async()=>{
+  const calls: string[]=[];
+  vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
+    calls.push(String(url));expect(new Headers(init?.headers).get('x-api-key')).toBe('fixture-exa-key');
+    expect(JSON.parse(String(init?.body)).query).toBe('Node.js stream backpressure');
+    return new Response(JSON.stringify({results:[{url:'https://nodejs.org/api/stream.html',title:'Streams',text:'Writers should respect backpressure.'}]}),{headers:{'content-type':'application/json'}});
+  }));
+  const providers=createAmbientProviders({EXA_API_KEY:'fixture-exa-key'});
+  expect(providers.configured.exa).toBe(true);
+  const sources=await providers.research!('Node.js stream backpressure',new AbortController().signal);
+  expect(sources).toMatchObject([{kind:'external',url:'https://nodejs.org/api/stream.html',text:'Writers should respect backpressure.'}]);
+  expect(calls).toEqual(['https://api.exa.ai/search']);
+});
+
+test('research without Exa credentials fails explicitly without any fallback',async()=>{
+  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+  await expect(createAmbientProviders({}).research!('Public topic',new AbortController().signal)).rejects.toMatchObject({code:'unconfigured'});
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('judge explicitly distinguishes a backend research request from already having sources',async()=>{
+  let prompt='';
+  vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
+    if(String(url).includes('async=1')){prompt=JSON.parse(String(init?.body)).text;return new Response(JSON.stringify({runId:'fixture-run'}),{headers:{'content-type':'application/json'}});}
+    const reply={kind:'research',query:'Node.js current LTS official release',evidenceIds:['transcript:fixture-segment:1']};
+    return new Response(`data: ${JSON.stringify({type:'CUSTOM',name:'run',value:{status:'done',result:{status:'ok',reply:JSON.stringify(reply)}}})}\n\ndata: ${JSON.stringify({type:'RUN_FINISHED'})}\n\n`,{headers:{'content-type':'text/event-stream'}});
+  }));
+  const input={...fixtureInput,evidence:fixtureInput.evidence.filter(e=>e.kind!=='external')};
+  await expect(createAmbientProviders({...fixtureEnv,EXA_API_KEY:'fixture-key'}).judge(input,new AbortController().signal)).resolves.toMatchObject({kind:'research'});
+  expect(prompt).toContain('BACKEND_RESEARCH_CAPABILITY: available');expect(prompt).toContain('prior external evidence is NOT required');
+  await createAmbientProviders(fixtureEnv).judge(input,new AbortController().signal);
+  expect(prompt).toContain('BACKEND_RESEARCH_CAPABILITY: unavailable');expect(prompt).not.toContain('BACKEND_RESEARCH_CAPABILITY: available');
 });

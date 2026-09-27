@@ -7,9 +7,11 @@ const grounded = { evidenceIds: referenceIds.min(1) };
 export const judgmentSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('quiet'), reason: z.string().max(300) }),
   z.object({ kind: z.literal('recall'), query: z.string().min(1).max(500), ...grounded }),
+  z.object({ kind: z.literal('research'), query: z.string().trim().min(1).max(240), ...grounded }),
   z.object({ kind: z.literal('calculate'), expression: z.string().min(1).max(160), label: z.string().min(1).max(100), ...grounded }),
   z.object({ kind: z.literal('cue'), text: z.string().min(1).max(180), detail: z.string().max(1200).optional(), topic: z.string().min(1).max(120), ...grounded }),
   z.object({ kind: z.literal('task'), title: z.string().min(1).max(160), instructions: z.string().min(1).max(2000), assignedTo: z.enum(['agent', 'operator']), assignmentBasis: z.enum(['direct_agent_request', 'agreed_shared_work', 'wearer_commitment']).optional(), explicitAssignmentSegmentId: z.string().min(1), ...grounded }),
+  z.object({ kind: z.literal('cancel_task'), taskId: z.string().min(1), ...grounded }),
   z.object({ kind: z.literal('calendar'), proposal: calendarActionSchema.omit({ id: true, proposalVersion: true, status: true }), ...grounded }),
 ]);
 export type Judgment = z.infer<typeof judgmentSchema>;
@@ -21,6 +23,9 @@ export type SummaryOutput = z.infer<typeof summaryOutputSchema>;
 export interface ContextAnchor {
   meetingId: string;
   revision: number;
+  /** Finalized-source context; transport-only interim updates do not change these. */
+  contextRevision?: number;
+  contextDigest?: string;
   correctionEpoch: number;
   lastSegmentId?: string;
   finalCount: number;
@@ -48,12 +53,13 @@ export interface ProviderReceipt { id: string; url?: string; detail?: string }
 export interface AmbientProviders {
   mode: 'live' | 'fixture' | 'unconfigured';
   decisionMode?: 'jev-native' | 'qm-only';
-  configured: { qm: boolean; gbrain: boolean; calendar: boolean };
+  configured: { qm: boolean; gbrain: boolean; calendar: boolean; exa?: boolean };
   judge(input: AmbientInput, signal: AbortSignal): Promise<ProviderJudgment>;
   summarize(input: AmbientInput, signal: AbortSignal): Promise<SummaryOutput>;
   recall(query: string, signal: AbortSignal): Promise<Evidence[]>;
+  research?(query: string, signal: AbortSignal): Promise<Evidence[]>;
   saveSummary(input: { meetingId: string; title: string; summary: MeetingSummary; transcript: MeetingSnapshot['transcript'] }, signal: AbortSignal): Promise<ProviderReceipt>;
-  prepareDocument(input: TaskInput, signal: AbortSignal): Promise<{ content?: string; url?: string; receipt: ProviderReceipt }>;
+  prepareDocument(input: TaskInput, signal: AbortSignal): Promise<{ content?: string; url?: string; evidence?: Evidence[]; receipt: ProviderReceipt }>;
   sendCalendar(input: { meetingId: string; proposal: CalendarAction; idempotencyKey: string; correctionEpoch: number }, signal: AbortSignal): Promise<ProviderReceipt>;
 }
 

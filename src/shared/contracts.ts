@@ -109,11 +109,25 @@ export type OperatorMessage = z.infer<typeof operatorMessageSchema>;
 export const taskStatusSchema = z.enum([
   "queued",
   "running",
+  "review_required",
   "completed",
   "failed",
   "cancelled",
 ]);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
+
+/** Context metadata for a task's source; it never contains transcript text. */
+export const taskOriginSchema = z.object({
+  meetingId: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  contextRevision: z.number().int().nonnegative().optional(),
+  contextDigest: z.string().min(1).optional(),
+  correctionEpoch: z.number().int().nonnegative(),
+  lastSegmentId: z.string().min(1).optional(),
+  finalCount: z.number().int().nonnegative(),
+  capturedAt: z.number().nonnegative(),
+});
+export type TaskOrigin = z.infer<typeof taskOriginSchema>;
 
 export const taskSchema = z.object({
   id: z.string().min(1),
@@ -122,6 +136,10 @@ export const taskSchema = z.object({
   content: z.string().optional(),
   url: z.string().url().optional(),
   error: z.string().optional(),
+  generation: z.number().int().positive().optional(),
+  artifactDigest: z.string().min(1).optional(),
+  contextDigest: z.string().min(1).optional(),
+  origin: taskOriginSchema.optional(),
 });
 export type Task = z.infer<typeof taskSchema>;
 
@@ -157,6 +175,45 @@ export const calendarActionSchema = z.object({
 });
 export type CalendarAction = z.infer<typeof calendarActionSchema>;
 
+export const deliveryActionStatusSchema = z.enum([
+  "proposed",
+  "sending",
+  "sent",
+  "uncertain",
+  "failed",
+  "cancelled",
+]);
+export type DeliveryActionStatus = z.infer<typeof deliveryActionStatusSchema>;
+
+export const deliveryRecipientSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).optional(),
+});
+export type DeliveryRecipient = z.infer<typeof deliveryRecipientSchema>;
+
+/**
+ * A reviewable delivery preview. The document bytes stay on the task/artifact
+ * boundary; this public action contains only the digest that binds approval to
+ * the reviewed artifact.
+ */
+export const documentDeliveryActionSchema = z.object({
+  id: z.string().min(1),
+  proposalVersion: z.number().int().positive(),
+  taskId: z.string().min(1),
+  generation: z.number().int().positive(),
+  artifactDigest: z.string().min(1),
+  contextDigest: z.string().min(1),
+  recipient: deliveryRecipientSchema,
+  subject: z.string().min(1),
+  body: z.string().min(1),
+  filename: z.string().min(1),
+  contentType: z.literal("text/markdown; charset=utf-8"),
+  status: deliveryActionStatusSchema,
+  providerError: z.string().min(1).optional(),
+  providerMessageId: z.string().min(1).optional(),
+});
+export type DocumentDeliveryAction = z.infer<typeof documentDeliveryActionSchema>;
+
 export const meetingSnapshotSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -168,6 +225,7 @@ export const meetingSnapshotSchema = z.object({
   summary: meetingSummarySchema.optional(),
   tasks: z.array(taskSchema),
   calendarAction: calendarActionSchema.optional(),
+  deliveryAction: documentDeliveryActionSchema.optional(),
   warnings: z.array(meetingWarningSchema).optional(),
   finalization: finalizationSchema.optional(),
   providerMode: providerModeSchema.optional(),
@@ -204,6 +262,17 @@ export const confirmActionRequestSchema = z.object({
 });
 export type ConfirmActionRequest = z.infer<typeof confirmActionRequestSchema>;
 
+export const reviewTaskRequestSchema = z.object({
+  generation: z.number().int().positive(),
+  contextDigest: z.string().min(1),
+});
+export type ReviewTaskRequest = z.infer<typeof reviewTaskRequestSchema>;
+
+export const confirmDeliveryRequestSchema = z.object({
+  proposalVersion: z.number().int().positive(),
+});
+export type ConfirmDeliveryRequest = z.infer<typeof confirmDeliveryRequestSchema>;
+
 export const postMessageRequestSchema = z.object({
   text: z.string().trim().min(1).max(4000),
   participantId: z.string().min(1),
@@ -223,6 +292,7 @@ export const eventTypeSchema = z.enum([
   "summary",
   "task",
   "action",
+  "delivery",
   "status",
   "error",
 ]);
@@ -243,6 +313,11 @@ export const actionEventPayloadSchema = z.object({
   calendarAction: calendarActionSchema,
 });
 export type ActionEventPayload = z.infer<typeof actionEventPayloadSchema>;
+
+export const deliveryEventPayloadSchema = z.object({
+  deliveryAction: documentDeliveryActionSchema,
+});
+export type DeliveryEventPayload = z.infer<typeof deliveryEventPayloadSchema>;
 
 export const errorPayloadSchema = z.object({
   code: z.string().min(1),
@@ -281,6 +356,11 @@ export const serverEventSchema = z.discriminatedUnion("type", [
     type: z.literal("action"),
     meetingId: z.string().min(1),
     payload: actionEventPayloadSchema,
+  }),
+  z.object({
+    type: z.literal("delivery"),
+    meetingId: z.string().min(1),
+    payload: deliveryEventPayloadSchema,
   }),
   z.object({
     type: z.literal("status"),

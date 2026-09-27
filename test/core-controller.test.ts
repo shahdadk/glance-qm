@@ -91,6 +91,87 @@ describe('durable ambient controller', () => {
     expect(calls).toBe(2);
   });
 
+  it.each(['cue', 'task', 'calendar'] as const)('preserves a deferred %s through interim-only transport traffic', async kind => {
+    const started = deferred<AmbientInput>(); const result = deferred<Judgment>(); let calls = 0; let sends = 0;
+    const { controller, meeting } = await setup({ decisionMode: 'qm-only', judge: async input => {
+      if (++calls === 1) { started.resolve(input); return result.promise; }
+      return { kind: 'quiet', reason: 'No further work' };
+    }, sendCalendar: async () => { sends++; return { id: 'fixture-event' }; } }, { providerTimeoutMs: 5000 });
+    await controller.append(meeting.id, final('Jarvis, prepare a brief and suggest a review meeting.', 1, 'segment-1', 'operator'));
+    const input = await started.promise;
+    await Promise.all(Array.from({ length: 20 }, (_, index) => controller.append(meeting.id, { segmentId: 'unfinished', text: `Uncommitted synthetic fragment ${index}`, revision: index + 1, isFinal: false })));
+    expect(input.recentTranscript).toHaveLength(1); expect(input.evidence).toHaveLength(1);
+    const evidenceIds = [input.evidence[0]!.id];
+    if (kind === 'cue') result.resolve({ kind, topic: 'Review', text: 'Review context is ready.', evidenceIds });
+    if (kind === 'task') result.resolve({ kind, title: 'Brief', instructions: 'Prepare brief', assignedTo: 'agent', assignmentBasis: 'direct_agent_request', explicitAssignmentSegmentId: 'segment-1', evidenceIds });
+    if (kind === 'calendar') result.resolve({ kind, proposal: { title: 'Review', start: '2026-10-01T10:00:00-07:00', end: '2026-10-01T10:30:00-07:00', timeZone: 'America/Los_Angeles', attendees: [{ email: 'fixture@example.com' }], description: 'Review brief' }, evidenceIds });
+    await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(record.revision).toBe(21); expect(record.contextRevision).toBe(1); expect(calls).toBe(1);
+    if (kind === 'cue') { expect(record.cue?.text).toBe('Review context is ready.'); expect(record.cue?.revision).toBe(input.anchor.revision); }
+    if (kind === 'task') { expect(record.tasks[0]?.status).toBe('completed'); expect(record.taskOrigins[record.tasks[0]!.id]?.origin.revision).toBe(input.anchor.revision); }
+    if (kind === 'calendar') {
+      expect(record.calendarAction?.status).toBe('proposed'); expect(record.actionExecution?.revision).toBe(input.anchor.revision);
+      await controller.append(meeting.id, { segmentId: 'unfinished', text: 'Still uncommitted', revision: 21, isFinal: false });
+      await controller.confirm(meeting.id, record.calendarAction!.id, record.calendarAction!.proposalVersion); await controller.waitForIdle(meeting.id);
+      expect(sends).toBe(1); expect((await controller.get(meeting.id)).calendarAction?.status).toBe('sent');
+    }
+  });
+
+  it('retains Jev verification across interim-only revisions without normalizing semantic changes', async () => {
+    const started = deferred<void>(); const release = deferred<void>(); let verified = false;
+    const { controller, meeting } = await setup({ decisionMode: 'jev-native', judge: async input => {
+      started.resolve(); await release.promise;
+      return { ...cue(input), authorization: { receiptId: 'fixture-receipt', verify: current => {
+        const normalized = { ...current, anchor: { ...current.anchor, capturedAt: input.anchor.capturedAt } };
+        verified = JSON.stringify(normalized) === JSON.stringify(input); return verified;
+      } } };
+    } });
+    await controller.append(meeting.id, final('Budget is $200.')); await started.promise;
+    await controller.append(meeting.id, { segmentId: 'interim', text: 'Unfinished next sentence', revision: 1, isFinal: false });
+    release.resolve(); await controller.waitForIdle(meeting.id);
+    expect(verified).toBe(true); expect((await controller.get(meeting.id)).cue).toBeDefined();
+  });
+
+  it('invalidates deferred work when an interim becomes finalized', async () => {
+    const started = deferred<AmbientInput>(); const result = deferred<Judgment>(); let calls = 0;
+    const { controller, meeting } = await setup({ judge: async input => { if (++calls === 1) { started.resolve(input); return result.promise; } return { kind: 'quiet', reason: 'New committed context' }; } });
+    await controller.append(meeting.id, final('Budget is $200.')); const input = await started.promise;
+    await controller.append(meeting.id, { segmentId: 'next', text: 'Cancel the old request.', revision: 1, isFinal: false });
+    await controller.append(meeting.id, { segmentId: 'next', text: 'Cancel the old request.', revision: 1, isFinal: true });
+    result.resolve(cue(input)); await controller.waitForIdle(meeting.id);
+    expect((await controller.get(meeting.id)).cue).toBeUndefined(); expect((await controller.get(meeting.id)).contextRevision).toBe(2);
+  });
+
+  it.each(['correction', 'operator-message'] as const)('invalidates deferred work after %s even with interim traffic', async change => {
+    const started = deferred<AmbientInput>(); const result = deferred<Judgment>(); let calls = 0;
+    const { controller, meeting } = await setup({ judge: async input => { if (++calls === 1) { started.resolve(input); return result.promise; } return { kind: 'quiet', reason: 'Revised context' }; } });
+    await controller.append(meeting.id, final('Budget is $200.')); const input = await started.promise;
+    await controller.append(meeting.id, { segmentId: 'interim', text: 'Unfinished sentence', revision: 1, isFinal: false });
+    if (change === 'correction') await controller.append(meeting.id, final('Budget is $300.', 2));
+    else await controller.message(meeting.id, { participantId: 'operator', text: 'Disregard the previous budget.' });
+    result.resolve(cue(input)); await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(record.cue).toBeUndefined(); expect(record.contextRevision).toBe(2); expect(calls).toBe(2);
+  });
+
+  it('migrates old records without dropping a never-started task or treating interim text as committed', async () => {
+    const { controller, meeting } = await setup({ judge: async input => ({ kind: 'task', title: 'Legacy brief', instructions: 'Prepare brief', assignedTo: 'operator', assignmentBasis: 'wearer_commitment', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] }) });
+    await controller.append(meeting.id, final('Please prepare my brief.', 1, 'segment-1', 'operator')); await controller.waitForIdle(meeting.id);
+    await controller.store.update(meeting.id, record => {
+      delete record.contextRevision;
+      for (const task of Object.values(record.taskOrigins)) { delete task.origin.contextRevision; delete task.origin.contextDigest; }
+      record.status = 'paused';
+    });
+    await controller.recover();
+    const migrated = await controller.get(meeting.id);
+    expect(migrated.contextRevision).toBe(migrated.revision); expect(migrated.tasks[0]?.status).toBe('queued');
+    await controller.control(meeting.id, 'resume');
+    await controller.append(meeting.id, { segmentId: 'interim', text: 'Unfinished next thought', revision: 1, isFinal: false });
+    await controller.end(meeting.id); await controller.waitForIdle(meeting.id);
+    expect((await controller.get(meeting.id)).tasks[0]?.status).toBe('completed');
+  });
+
   it('publishes one cue with exact original evidence, and rejects invented references', async () => {
     const { controller, meeting, providers } = await setup({ judge: async input => cue(input) });
     await controller.append(meeting.id, final('Budget is $200.'));
@@ -102,6 +183,59 @@ describe('durable ambient controller', () => {
     const record = await controller.get(meeting.id);
     expect(record.cue?.text).not.toBe('Unsupported result');
     expect(record.warnings.some(warning => warning.message.includes('unknown evidence'))).toBe(true);
+  });
+
+  it('can research after a GBrain miss and cites only the exact returned public source', async () => {
+    let judgments = 0; let recalls = 0; let searches = 0;
+    const source = { id: 'exa:fixture-source', label: 'Fixture public documentation', text: 'The documented limit is 24 items.', url: 'https://example.com/documented-limit', kind: 'external' as const };
+    const { controller, meeting } = await setup({
+      judge: async input => {
+        judgments++;
+        if (judgments === 1) return { kind: 'recall', query: 'documented item limit', evidenceIds: [input.evidence[0]!.id] };
+        if (judgments === 2) return { kind: 'research', query: 'documented item limit', evidenceIds: [input.evidence[0]!.id] };
+        return { kind: 'cue', topic: 'Public limit', text: 'The documented limit is 24 items.', evidenceIds: [source.id] };
+      },
+      recall: async () => { recalls++; return []; },
+      research: async () => { searches++; return [source]; },
+    });
+    await controller.append(meeting.id, final('What is the documented item limit?')); await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(recalls).toBe(1); expect(searches).toBe(1); expect(judgments).toBe(3);
+    expect(record.cue?.evidence).toEqual([source]); expect(record.externalEvidence).toEqual([source]);
+  });
+
+  it('rejects fabricated citation IDs after public research', async () => {
+    let judgments = 0;
+    const { controller, meeting } = await setup({ judge: async input => ++judgments === 1 ? { kind: 'research', query: 'public item limit', evidenceIds: [input.evidence[0]!.id] } : { kind: 'cue', topic: 'Limit', text: 'Unsupported answer', evidenceIds: ['exa:invented'] }, research: async () => [{ id: 'exa:returned', label: 'Fixture', text: 'Actual fixture excerpt', url: 'https://example.com/source', kind: 'external' }] });
+    await controller.append(meeting.id, final('Look up the public item limit.')); await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(record.cue).toBeUndefined(); expect(record.warnings.some(warning => warning.message.includes('unknown evidence reference'))).toBe(true);
+  });
+
+  it('discards a public search result after newer finalized context arrives', async () => {
+    const started = deferred<void>(); const result = deferred<import('../src/shared/contracts.js').Evidence[]>(); let judgments = 0;
+    const { controller, meeting } = await setup({ judge: async input => ++judgments === 1 ? { kind: 'research', query: 'public item limit', evidenceIds: [input.evidence[0]!.id] } : { kind: 'quiet', reason: 'Search request withdrawn' }, research: async () => { started.resolve(); return result.promise; } });
+    await controller.append(meeting.id, final('Look up the public item limit.')); await started.promise;
+    await controller.append(meeting.id, final('Drop that question.', 1, 'withdrawal'));
+    result.resolve([{ id: 'exa:late', label: 'Late fixture source', text: 'Late public result', url: 'https://example.com/late', kind: 'external' }]);
+    await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(record.externalEvidence).toEqual([]); expect(record.cue).toBeUndefined(); expect(judgments).toBe(2);
+  });
+
+  it('reports unavailable public research without fabricating a factual result', async () => {
+    const { controller, meeting } = await setup({ judge: async input => ({ kind: 'research', query: 'public item limit', evidenceIds: [input.evidence[0]!.id] }) });
+    await controller.append(meeting.id, final('Look up the public item limit.')); await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(record.cue).toBeUndefined(); expect(record.externalEvidence).toEqual([]);
+    expect(record.warnings.some(warning => warning.message.includes('Exa public web research is not configured'))).toBe(true);
+  });
+
+  it('coalesces repeated research into one search and one follow-up judgment per context', async () => {
+    let judgments = 0; let searches = 0;
+    const { controller, meeting } = await setup({ judge: async input => { judgments++; return { kind: 'research', query: 'public item limit', evidenceIds: [input.evidence[0]!.id] }; }, research: async () => { searches++; return []; } });
+    await controller.append(meeting.id, final('Look up the public item limit.')); await controller.waitForIdle(meeting.id);
+    expect(searches).toBe(1); expect(judgments).toBe(2);
   });
 
   it('checks Jev authorization against current input before publishing', async () => {
@@ -195,8 +329,8 @@ describe('durable ambient controller', () => {
 
   it('does not execute an accepted task withdrawn by a new final segment', async () => {
     let documents = 0;
-    const { controller, meeting, providers } = await setup({ judge: async input => ({ kind: 'task', title: 'Brief', instructions: 'Write brief', assignedTo: 'agent', assignmentBasis: 'direct_agent_request', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] }), prepareDocument: async () => { documents++; return { content: '# Brief', receipt: { id: 'unexpected' } }; } });
-    await controller.append(meeting.id, final('Jarvis, please prepare the brief.')); await controller.waitForIdle(meeting.id);
+    const { controller, meeting, providers } = await setup({ judge: async input => ({ kind: 'task', title: 'Brief', instructions: 'Write brief', assignedTo: 'operator', assignmentBasis: 'wearer_commitment', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] }), prepareDocument: async () => { documents++; return { content: '# Brief', receipt: { id: 'unexpected' } }; } });
+    await controller.append(meeting.id, final('Please prepare my brief.', 1, 'segment-1', 'operator')); await controller.waitForIdle(meeting.id);
     providers.judge = async () => ({ kind: 'quiet', reason: 'Task withdrawn' });
     await controller.append(meeting.id, final('Do not prepare that document.', 1, 'withdrawal'));
     await controller.end(meeting.id); await controller.waitForIdle(meeting.id);
@@ -204,8 +338,8 @@ describe('durable ambient controller', () => {
   });
 
   it('reaffirms a standing task against the full final transcript before dispatch', async () => {
-    const { controller, meeting } = await setup({ judge: async input => ({ kind: 'task', title: 'Brief', instructions: 'Write brief', assignedTo: 'agent', assignmentBasis: 'direct_agent_request', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence.find(item => item.id === 'transcript:segment-1:1')!.id] }) });
-    await controller.append(meeting.id, final('Jarvis, please prepare the brief.')); await controller.waitForIdle(meeting.id);
+    const { controller, meeting } = await setup({ judge: async input => ({ kind: 'task', title: 'Brief', instructions: 'Write brief', assignedTo: 'operator', assignmentBasis: 'wearer_commitment', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence.find(item => item.id === 'transcript:segment-1:1')!.id] }) });
+    await controller.append(meeting.id, final('Please prepare my brief.', 1, 'segment-1', 'operator')); await controller.waitForIdle(meeting.id);
     await controller.append(meeting.id, final('Include our timeline too.', 1, 'continuation'));
     await controller.end(meeting.id); await controller.waitForIdle(meeting.id);
     const record = await controller.get(meeting.id);
@@ -249,6 +383,43 @@ describe('durable ambient controller', () => {
     expect(record.status).toBe('paused'); expect(record.cue?.text).toBe('Interviews per week: 8');
   });
 
+  it.each(['calculate', 'task'] as const)('finishes an unchanged in-flight %s after microphone pause', async kind => {
+    const started = deferred<AmbientInput>(); const result = deferred<Judgment>(); let judgments = 0;
+    const { controller, meeting } = await setup({ judge: async input => { judgments++; started.resolve(input); return result.promise; } });
+    await controller.append(meeting.id, final('We agreed the assistant should draft a PRD for 48 interviews over 6 weeks.'));
+    const input = await started.promise;
+    await controller.control(meeting.id, 'pause');
+    await expect(controller.append(meeting.id, final('No new capture', 1, 'blocked'))).rejects.toMatchObject({ code: 'capture_stopped' });
+    if (kind === 'calculate') result.resolve({ kind, expression: '48 / 6', label: 'Interviews per week', evidenceIds: [input.evidence[0]!.id] });
+    else result.resolve({ kind, title: 'Interview PRD', instructions: 'Prepare a read-only PRD', assignedTo: 'agent', assignmentBasis: 'agreed_shared_work', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] });
+    await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id);
+    expect(record.status).toBe('paused'); expect(judgments).toBe(1);
+    if (kind === 'calculate') expect(record.cue?.text).toBe('Interviews per week: 8');
+    else expect(record.tasks[0]?.status).toBe('completed');
+  });
+
+  it('drains speech paused before debounce exactly once and retains the resulting cue', async () => {
+    let judgments = 0;
+    const { controller, meeting } = await setup({ judge: async input => { judgments++; return { kind: 'calculate', expression: '48 / 6', label: 'Interviews per week', evidenceIds: [input.evidence[0]!.id] }; } }, { debounceMs: 40, maxWaitMs: 80 });
+    await controller.append(meeting.id, final('How many per week is 48 interviews over 6 weeks?'));
+    await controller.control(meeting.id, 'pause'); await controller.waitForIdle(meeting.id);
+    const first = await controller.get(meeting.id); expect(first.cue?.text).toBe('Interviews per week: 8');
+    await controller.control(meeting.id, 'pause'); await controller.waitForIdle(meeting.id);
+    expect((await controller.get(meeting.id)).cue?.id).toBe(first.cue?.id); expect(judgments).toBe(1);
+  });
+
+  it('rejects pre-pause work when an operator message changes the committed context', async () => {
+    const started = deferred<AmbientInput>(); const result = deferred<Judgment>(); let judgments = 0;
+    const { controller, meeting } = await setup({ judge: async input => { if (++judgments === 1) { started.resolve(input); return result.promise; } return { kind: 'quiet', reason: 'Operator withdrew request' }; } });
+    await controller.append(meeting.id, final('We agreed the assistant should prepare the PRD.')); const input = await started.promise;
+    await controller.control(meeting.id, 'pause');
+    await controller.message(meeting.id, { participantId: 'operator', text: 'Withdraw that PRD request.' });
+    result.resolve({ kind: 'task', title: 'Withdrawn PRD', instructions: 'Prepare PRD', assignedTo: 'agent', assignmentBasis: 'agreed_shared_work', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] });
+    await controller.waitForIdle(meeting.id);
+    const record = await controller.get(meeting.id); expect(record.status).toBe('paused'); expect(record.tasks).toHaveLength(0); expect(judgments).toBe(2);
+  });
+
   it('recovers ambiguous work without automatically replaying external actions', async () => {
     const { controller, meeting, providers } = await setup();
     let sends = 0; providers.sendCalendar = async () => { sends++; return { id: 'unexpected' }; };
@@ -277,8 +448,8 @@ describe('durable ambient controller', () => {
 
   it.each(['completed', 'failed'] as const)('recovers never-started document work after summary %s without replaying its write', async state => {
     let saves = 0; let documents = 0;
-    const { controller, meeting } = await setup({ judge: async input => ({ kind: 'task', title: 'Brief', instructions: 'Write brief', assignedTo: 'agent', assignmentBasis: 'direct_agent_request', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] }), saveSummary: async () => { saves++; return { id: 'unexpected-save' }; }, prepareDocument: async () => { documents++; return { content: '# Recovered brief', receipt: { id: 'recovered-document' } }; } });
-    await controller.append(meeting.id, final('Jarvis, prepare the brief.')); await controller.waitForIdle(meeting.id);
+    const { controller, meeting } = await setup({ judge: async input => ({ kind: 'task', title: 'Brief', instructions: 'Write brief', assignedTo: 'operator', assignmentBasis: 'direct_agent_request', explicitAssignmentSegmentId: 'segment-1', evidenceIds: [input.evidence[0]!.id] }), saveSummary: async () => { saves++; return { id: 'unexpected-save' }; }, prepareDocument: async () => { documents++; return { content: '# Recovered brief', receipt: { id: 'recovered-document' } }; } });
+    await controller.append(meeting.id, final('Please prepare my brief.', 1, 'segment-1', 'operator')); await controller.waitForIdle(meeting.id);
     await controller.store.update(meeting.id, value => { value.status = 'ended'; value.finalization = { state }; });
     await controller.recover(); await controller.waitForIdle(meeting.id);
     expect((await controller.get(meeting.id)).tasks[0]?.status).toBe('completed'); expect(documents).toBe(1); expect(saves).toBe(0);

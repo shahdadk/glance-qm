@@ -53,8 +53,8 @@ Sources: [CLI](https://www.memorable.sh/docs/cli),
 The environment has the designated variable names `GOOGLE_OAUTH_CLIENT_ID`,
 `GOOGLE_OAUTH_CLIENT_SECRET`, and `GOOGLE_OAUTH_REFRESH_TOKEN`. A read-only
 refresh attempt against Google's token endpoint returned `invalid_grant` on
-2026-09-27. A subsequent fresh Calendar-only OAuth login succeeded for
-`shahdadkompanizare@gmail.com`; Google granted `calendar.events` plus
+2026-09-27. A subsequent fresh Calendar-only OAuth login succeeded for the
+designated Google account; Google granted `calendar.events` plus
 openid/email/profile identity scopes. New refresh credentials were exported
 directly into the private `google.env` file. The inherited refresh token remains
 stale: load this file before starting the runtime. A fresh official token
@@ -103,3 +103,20 @@ so it is not the chosen path for this Calendar-only demonstration.
 Sources: [Google Workspace CLI authentication](https://github.com/googleworkspace/cli#authentication),
 [Google Calendar authorization](https://developers.google.com/workspace/calendar/api/auth),
 and [QM Google connector configuration](https://github.com/yc-software/qm/blob/main/src/connectors/oauth.ts).
+
+## Email delivery expansion
+
+The requested PRD email feature uses `gmail.send` only, alongside the existing
+Calendar event and identity scopes. Human OAuth approval completed. Tokeninfo verified `gmail.send` and
+`calendar.events` plus identity scopes, userinfo verified the designated
+account, and Calendar events read returned HTTP 200.
+No Gmail read/modify or Drive scope was granted. The runtime file was replaced
+atomically after these checks, with its previous version backed up privately
+as `google.before-gmail.env` (mode `0600`). Email sending still requires confirmation of the exact recipient,
+subject, message, and document preview.
+
+The verified grant populates `GOOGLE_OAUTH_SCOPES` (space-separated exact
+scopes) and `GOOGLE_GMAIL_FROM_EMAIL` in the private `google.env` file. These
+are readiness metadata; a configured string alone does not prove a valid grant.
+
+No live email was sent during account setup.

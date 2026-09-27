@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Phase 2 integration verification
+Last updated: final integration verification
 
 ## Implemented
 
@@ -20,10 +20,15 @@ Last updated: Phase 2 integration verification
   transcript and attendee redaction.
 - Google Calendar OAuth read and exact preview verification pass. No calendar
   invitation has been sent during QA.
-- Jev adapter code and 18 fixture tests pass; no Jev credential is configured,
-  so live Jev selection remains blocked. QM remains the default decision mode.
-- Native iOS is installed and registered, but a real glasses connection and
-  sustained Speech/Display rehearsal remain unverified.
+- Exa live retrieval returned four attributed sources, and the research-first
+  PRD path was verified through the core. Jev live adapter/gate probes and
+  Jev-native core verification pass; QM remains the default decision mode.
+- Calendar OAuth read and exact preview verification pass; no invitation has
+  been sent. Document delivery is digest-, recipient-, generation-, and
+  context-bound; no email has been sent.
+- Native iOS signed build and tests pass. A physical Meta Speech test produced
+  a nonempty final transcript that reached the backend with HTTP 200. Sustained
+  background capture and full Display rehearsal remain unverified.
 - Repository ignores local secrets, recordings, generated output, and build
   artifacts. TypeScript source checking remains strict; `skipLibCheck` is
   enabled only for the duplicate `containSubset` declarations emitted by the
@@ -31,12 +36,13 @@ Last updated: Phase 2 integration verification
 
 ## Verification evidence
 
-- `npm run check`: both TypeScript projects and 84 tests pass.
+- `npm run check`: both TypeScript projects and the current full test suite pass.
 - `npm run build`: production web bundle builds successfully.
 - `npm run demo`: deterministic provider/controller flow passes.
 - Connected verifier: 14/14 checks pass against the live QM/GBrain/Memorable
   stack, with calendar intentionally held at read/preview verification.
-- Native device connection: pending a physical glasses rehearsal.
+- Exa/ambient, Jev, delivery, and native transport verification receipts are
+  recorded in the focused docs and tests.
 
 ## Readiness rule
 
@@ -46,9 +52,9 @@ mock, or a provider configuration file is reported as such and does not count.
 
 ## Remaining limits and next checks
 
-1. Pair the installed native bridge with the physical glasses and verify
-   sustained Speech transcription plus Display updates.
-2. Rehearse the entire meeting flow with two participants and record only
-   sanitized receipts.
-3. If the operator chooses to send an invitation, verify the exact preview and
-   provider readback first; no automatic retry follows an uncertain outcome.
+1. Verify sustained background Speech transcription and full Display updates on
+   the physical glasses with the latest installed source.
+2. Rehearse the universal ambient flow and its meeting demonstration with two
+   participants, recording only sanitized receipts.
+3. If the operator chooses to send an invitation or document, verify the exact
+   preview and provider readback first; no automatic retry follows uncertainty.
