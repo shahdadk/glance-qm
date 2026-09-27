@@ -205,24 +205,24 @@ test('instant context is explicitly opt-in and absent from the default provider 
   expect(()=>createAmbientProviders({...fixtureEnv,GLANCE_INSTANT_CONTEXT:'true'})).toThrow(/requires jev-native/);
 });
 
-test('opt-in partial lookup returns sources only and final publication gets a fresh Jev receipt',async()=>{
+test('opt-in partial lookup tolerates ASR spelling and final publication gets a fresh Jev receipt',async()=>{
   let gates=0;let searches=0;let qmCalls=0;
   vi.stubGlobal('fetch',vi.fn(async(url:string|URL,init?:RequestInit)=>{
     if(String(url).includes('typesafe.ai')){
-      gates++;const request=JSON.parse(String(init?.body));const ids=Object.keys(request.questions.action.criteria);const chosen=ids.find(id=>id!=='__hold__')!;
+      gates++;const request=JSON.parse(String(init?.body));if(!request.questions.action) return new Response(JSON.stringify({model:'fixture',answers:Object.fromEntries(Object.keys(request.questions).map(key=>[key,{type:'noul',noul:1}])),usage:{input_tokens:1,output_tokens:1}}),{headers:{'content-type':'application/json'}});const ids=Object.keys(request.questions.action.criteria);const chosen=ids.find(id=>id!=='__hold__')!;
       return new Response(JSON.stringify({model:'jev-1.13.0',answers:{action:{type:'choice',choice:chosen,probabilities:Object.fromEntries(ids.map(id=>[id,id===chosen?1:0])),confidence:1}},usage:{input_tokens:1,output_tokens:1}}),{headers:{'content-type':'application/json'}});
     }
-    if(String(url).includes('api.exa.ai')){searches++;return new Response(JSON.stringify({results:[{url:'https://example.org/profile',title:'Fixture public profile',text:'Garry Tan leads a public technology organization.'}]}),{headers:{'content-type':'application/json'}});}
+    if(String(url).includes('api.exa.ai')){searches++;return new Response(JSON.stringify({results:[{url:'https://example.org/profile',title:'Garry Tan — fixture public profile',text:'Garry Tan leads a public technology organization.'}]}),{headers:{'content-type':'application/json'}});}
     qmCalls++;throw new Error('No QM expected for eligible native fixture');
   }));
   const p=createAmbientProviders({...fixtureEnv,GLANCE_DECISION_MODE:'jev-native',GLANCE_INSTANT_CONTEXT:'true',JEV_API_KEY:'fixture',EXA_API_KEY:'fixture'});
-  const partial={id:'intro-partial',revision:1,text:"I'm Garry Tan.",isFinal:false,capturedAt:'2026-09-27T12:00:00Z'};
+  const partial={id:'intro-partial',revision:1,text:"Hi, I'm Gary Tan from y culminator.",isFinal:false,capturedAt:'2026-09-27T12:00:00Z'};
   const sources=await p.prefetch!({...fixtureInput,partialTranscript:[partial]},new AbortController().signal);
   expect(sources).toHaveLength(1);expect(sources[0]?.kind).toBe('external');expect(sources[0]).not.toHaveProperty('authorization');
   const final={...fixtureInput,recentTranscript:[{...partial,isFinal:true,revision:2}],evidence:[{id:'transcript:intro-partial:2',label:'Final intro',text:partial.text,kind:'transcript' as const},...sources]};
   const decision=await p.judge(final,new AbortController().signal);
   expect(decision.kind).toBe('cue');expect(decision.authorization?.verify(final)).toBe(true);expect(decision.authorization?.verify({...final,anchor:{...final.anchor,correctionEpoch:1}})).toBe(false);
-  expect(gates).toBe(2);expect(searches).toBe(1);expect(qmCalls).toBe(0);
+  expect(gates).toBe(3);expect(searches).toBe(1);expect(qmCalls).toBe(0);
 });
 
 test('instant Jev hold never falls through to QM',async()=>{

@@ -41,6 +41,30 @@ Last updated: final integration verification
 
 ## Verification evidence
 
+- Final context-card revision: `npm run check` passes 205 tests in 14 files;
+  `npm run build` and `npm run demo` pass. Native fact cards rank literal source
+  clauses and require a separate strict Jev publication gate. An isolated real
+  Exa/Jev HTTP/WebSocket probe produced three Garry Tan background bullets,
+  including Stanford education, from the official YC biography in 1,878 ms
+  from accepted final text to snapshot. This is synthetic transport timing,
+  not physical speech-to-lens timing or a guaranteed latency. A separate Sajan
+  Khosa / Liquid Energy input produced two attributed company-background
+  bullets in 991 ms. Source availability and strict confidence holds can still
+  suppress a card; these measurements are successful runs, not an SLA.
+- GBrain summary replacement now reads the existing revision and uses
+  compare-and-swap; create-only writes remain create-only. Nine focused tests
+  cover safe repeated saves and conflict/error handling. After reboot recovery,
+  a real synthetic first create and second replacement of the same GBrain page
+  passed independent readback with distinct revisions. The complete two-QM-
+  summary controller verifier is included; its post-reboot result is pending.
+- A host reboot stopped the local stack and removed the temporary QM checkout.
+  The pinned source was restored to persistent storage. Backend transport and
+  the replacement HTTPS tunnel are verified, including authenticated snapshot
+  readback. GBrain and QM are restored; authenticated access to the original QM
+  project and an actual `QM_LIVE_OK` model completion both pass. Configured
+  provider labels alone do not establish service connectivity. No new physical Display or sustained
+  background Speech success is claimed.
+
 - `npm run check`: both TypeScript projects and the current full test suite pass.
 - `npm run build`: production web bundle builds successfully.
 - `npm run demo`: deterministic provider/controller flow passes.

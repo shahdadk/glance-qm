@@ -14,6 +14,7 @@ mkdirSync(localDir, { recursive: true, mode: 0o700 });
 chmodSync(localDir, 0o700);
 const stateFile = join(localDir, 'demo-processes.json');
 const logFile = join(localDir, 'demo-backend.log');
+const recoverBackend = process.argv.includes('--recover-backend');
 const node = process.env.QM_NODE_BIN || ['/opt/homebrew/opt/node@24/bin/node', '/usr/local/opt/node@24/bin/node'].find(existsSync) || process.execPath;
 const allowed = new Set(`PATH HOME TMPDIR LANG LC_ALL TZ USER LOGNAME SHELL NODE_EXTRA_CA_CERTS PORT HOST WEB_PORT GLANCE_LOCAL_DIR GLANCE_OPERATOR_TOKEN GLANCE_ALLOWED_ORIGINS GLANCE_DECISION_MODE GLANCE_AMBIENT_DEBOUNCE_MS GLANCE_INSTANT_CONTEXT QM_BASE_URL QM_SOURCE_SECRET QM_SIGNING_SECRET CORE_SIGNING_SECRET QM_PROJECT_ID QM_THREAD_REF QM_ACTOR_EXTERNAL_ID QM_PRINCIPAL_ID QM_ACTOR_DISPLAY_NAME QM_ACTOR_EMAIL QM_MODEL QM_HARNESS QM_THINKING_LEVEL QM_JUDGE_MODEL QM_JUDGE_THINKING_LEVEL QM_JUDGE_FAST_MODE QM_CONNECTION_FILE QM_RUNTIME_ENV GBRAIN_CONFIG_FILE GBRAIN_MCP_URL GBRAIN_BASE_URL GBRAIN_CLIENT_ID GBRAIN_CLIENT_SECRET GBRAIN_TOKEN_URL GBRAIN_RECALL_TOOL GBRAIN_SAVE_SUMMARY_TOOL GBRAIN_GET_PAGE_TOOL GBRAIN_AUTH_MODE GBRAIN_BEARER_TOKEN GBRAIN_API_TOKEN MEMORABLE_API_KEY MEMORABLE_BIN MEMORABLE_HOME MEMORABLE_BASE_URL MEMORABLE_API_TOKEN MEMORABLE_CONFIG_FILE GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REFRESH_TOKEN GOOGLE_OAUTH_SCOPES GOOGLE_GMAIL_FROM_EMAIL GOOGLE_ACCESS_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN GOOGLE_CALENDAR_ID GOOGLE_OAUTH_CONFIG_FILE GOOGLE_WORKSPACE_CLI_CONFIG_DIR GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE EXA_API_KEY JEV_API_KEY TYPESAFE_API_KEY JEV_MODEL JEV_BASE_URL`.split(' '));
 const env = {};
@@ -132,7 +133,7 @@ function report(data, tokenPath, pairingPath) {
   privateWrite(pairingPath, JSON.stringify({ serverURL: nativeURL, operatorToken: env.GLANCE_OPERATOR_TOKEN }, null, 2) + '\n');
   console.log(`Operator token file: ${tokenPath}`);
   console.log(`Private native pairing file: ${pairingPath}`);
-  console.log(`Provider mode: ${data.providerMode}; decision mode: ${data.decisionMode}; QM/GBrain readiness verified. Provider actions require completed live receipts.`);
+  console.log(`Provider mode: ${data.providerMode}; decision mode: ${data.decisionMode}; ${recoverBackend ? 'QM/GBrain connectivity is not verified during backend recovery' : 'QM/GBrain readiness verified'}. Provider actions require completed live receipts.`);
 }
 try {
   const checkFd = openSync(join(localDir, 'demo-typecheck.log'), 'w', 0o600); chmodSync(join(localDir, 'demo-typecheck.log'), 0o600);
@@ -146,7 +147,8 @@ try {
     if (created.status !== 0) throw new Error('Could not load the private operator token.');
     env.GLANCE_OPERATOR_TOKEN = readFileSync(tokenPath, 'utf8').trim();
   }
-  await checkProviders();
+  if (recoverBackend) console.log('Backend recovery requested: keeping capture and direct research available while QM/GBrain connectivity is restored.');
+  else await checkProviders();
   const configHash = createHash('sha256').update(JSON.stringify(Object.entries(env).sort())).digest('hex');
   const previous = existsSync(stateFile) ? jsonFile(stateFile) : undefined;
   const current = await healthy();
@@ -154,7 +156,9 @@ try {
     const backend = previous?.processes?.find(item => item.name === 'backend');
     if (!backend || identity(backend.pid) !== backend.identity) throw new Error('Port is occupied by an unowned backend; refusing to replace or adopt it.');
     if (previous.configHash !== configHash) throw new Error('Demo configuration changed. Run stop-demo.mjs, then start-demo.mjs to load it.');
-    await authCheck(); report(current, tokenPath, join(localDir, 'pairing.json'));
+    await authCheck();
+    privateWrite(stateFile, JSON.stringify({ ...previous, providerConnectivityVerified: !recoverBackend }, null, 2) + '\n');
+    report(current, tokenPath, join(localDir, 'pairing.json'));
   } else {
     if (previous?.processes?.some(record => record.name === 'backend' && identity(record.pid) === record.identity)) throw new Error('An owned demo process is running but unhealthy. Stop it with stop-demo.mjs before restarting.');
     preserved.push(...(previous?.processes || []).filter(record => record.name !== 'backend' && identity(record.pid) === record.identity));
@@ -174,7 +178,7 @@ try {
       for (let n = 0; n < 60; n++) { try { webReady = (await fetch(`http://127.0.0.1:${webPort}/`, { signal: AbortSignal.timeout(1000) })).ok; } catch {} if (webReady) break; if (identity(web.pid) !== web.identity) break; await delay(100); }
       if (!webReady) throw new Error('Web surface failed to become healthy; inspect its private log.');
     }
-    saveState({ configHash, backendURL: loopback, startedAt: new Date().toISOString(), authVerified: true, sourceVersion: deployedSource });
+    saveState({ configHash, backendURL: loopback, startedAt: new Date().toISOString(), authVerified: true, providerConnectivityVerified: !recoverBackend, sourceVersion: deployedSource });
     report(data, tokenPath, join(localDir, 'pairing.json'));
   }
 } catch (error) {

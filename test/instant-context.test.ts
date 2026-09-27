@@ -8,6 +8,7 @@ function input(text = "Hi, I'm Ada Lovelace.", isFinal = true): AmbientInput {
 }
 function gate(hold = false) {
   const batch = vi.fn<JevAdapter['batch']>().mockImplementation(async request => {
+    if (!request.questions.action) return { model: 'fixture', answers: Object.fromEntries(Object.keys(request.questions).map(key => [key, { type: 'noul' as const, noul: 1 }])), usage: { input_tokens: 1, output_tokens: 1 } };
     const q = request.questions.action!;
     if (q.type !== 'choice') throw new Error('Expected choice');
     const keys = Object.keys(q.criteria);
@@ -23,6 +24,7 @@ describe('bounded literal identity candidates', () => {
     expect(instantIdentitySpans("Hi, I'm Ada Lovelace. I work here.")).toEqual(['Ada Lovelace']);
     expect(instantIdentitySpans('This is Marisol Vega from Northstar.')).toEqual(['Marisol Vega from Northstar']);
     expect(instantIdentitySpans('Meet Alex at Brightwave.')).toEqual(['Alex at Brightwave']);
+    expect(instantIdentitySpans('Sajan Khosa, Liquid Energy')).toEqual(['Sajan Khosa, Liquid Energy']);
   });
   it('does not guess from a first name, arbitrary task text, or appearance', () => {
     for (const text of ["I'm Alex.", "I'm drafting a proposal.", 'The face looks like Ada Lovelace.', 'Discuss Ada Lovelace.']) expect(instantIdentitySpans(text)).toEqual([]);
@@ -38,6 +40,11 @@ describe('native instant context', () => {
     expect(result?.authorization?.verify({ ...original, anchor: { ...original.anchor, correctionEpoch: 1 } })).toBe(false);
     expect(fixture.batch).toHaveBeenCalledTimes(1);
   });
+  it('normalizes only a literal company connective for consistent public lookup', async () => {
+    const fixture = gate();
+    const result = await tryInstantContext(fixture.gate, input("I'm Sajan Khosa from Liquid Energy."), signal());
+    expect(result).toMatchObject({ kind: 'research', query: 'Sajan Khosa, Liquid Energy official company technology' });
+  });
   it('holds when Jev rejects an enumerated span; regex does not authorize research', async () => {
     const fixture = gate(true);
     expect(await tryInstantContext(fixture.gate, input('This is Not Ada Lovelace.'), signal())).toMatchObject({ kind: 'quiet' });
@@ -47,7 +54,7 @@ describe('native instant context', () => {
     const sentence = 'Ada Lovelace wrote an algorithm for the Analytical Engine.';
     enriched.evidence.push({ id: 'exa:1', kind: 'external', text: sentence, label: 'Ada Lovelace biography', url: 'https://museum.org/ada' });
     const result = await tryInstantContext(fixture.gate, enriched, signal());
-    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: ${sentence}`, evidenceIds: ['exa:1'] });
+    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: Ada Lovelace\n• ${sentence.replace(/^Ada Lovelace /, '').replace(/\.$/, '').replace(/^./, value => value.toUpperCase())}`, evidenceIds: ['exa:1'] });
     expect(result?.authorization?.verify(enriched)).toBe(true);
     const changed = structuredClone(enriched); changed.evidence[1]!.text = 'Changed source';
     expect(result?.authorization?.verify(changed)).toBe(false);
@@ -64,7 +71,7 @@ describe('native instant context', () => {
     const sentence = 'Ada Lovelace did not save $1.5 billion through the Analytical Engine.';
     enriched.evidence.push({ id: 'exa:1', kind: 'external', text: sentence, label: 'Ada Lovelace biography', url: 'https://museum.org/ada' });
     const result = await tryInstantContext(fixture.gate, enriched, signal());
-    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: ${sentence}` });
+    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: Ada Lovelace\n• ${sentence.replace(/^Ada Lovelace /, '').replace(/\.$/, '').replace(/^./, value => value.toUpperCase())}` });
     const overlong = input();
     overlong.evidence.push({ id: 'exa:2', kind: 'external', text: `Ada Lovelace ${'was repeatedly misquoted and '.repeat(6)}did not save $1.5 billion through the Analytical Engine.`, label: 'Ada biography', url: 'https://museum.org/ada' });
     expect(await tryInstantContext(fixture.gate, overlong, signal())).toBeUndefined();
@@ -73,7 +80,7 @@ describe('native instant context', () => {
     const fixture = gate(true); const current = input();
     current.evidence.push({ id: 'exa:old', kind: 'external', text: 'Grace Hopper developed an early computer compiler.', label: 'Grace Hopper biography', url: 'https://museum.org/other' });
     expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'quiet' });
-    expect(fixture.batch).toHaveBeenCalledTimes(1);
+    expect(fixture.batch).toHaveBeenCalledTimes(2);
   });
   it('prefers the last repeated introduction and lets Jev validate an ASR spelling variant', async () => {
     const fixture = gate(); const current = input("Hi, I'm Gary Tatten. Let me try that again. I'm Gary Tan.");
@@ -81,11 +88,37 @@ describe('native instant context', () => {
     const sentence = 'Garry Tan is president and CEO of Y Combinator and a General Partner.';
     current.evidence.push({ id: 'exa:alias', kind: 'external', text: sentence, label: 'Garry Tan: YC Partner', url: 'https://www.ycombinator.com/people/garry-tan' });
     const result = await tryInstantContext(fixture.gate, current, signal());
-    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: ${sentence}`, evidenceIds: ['exa:alias'] });
+    expect(result).toMatchObject({ kind: 'cue', text: `Possible match: Garry Tan\n• Is president and CEO of Y Combinator and a General Partner`, evidenceIds: ['exa:alias'] });
     expect(result?.authorization?.verify(current)).toBe(true);
-    const q = fixture.batch.mock.calls[1]![0].questions.action!;
+    const q = fixture.batch.mock.calls[2]![0].questions.action!;
     expect(q.instructions).toContain('conflicting organization/role');
     expect(q.instructions).toContain('ASR spelling differences');
+  });
+  it('ranks source-supported education and prior ventures into short bullets with a strict final gate', async () => {
+    const fixture = gate(); const current = input("I'm Marisol Vega, CEO of Northstar.");
+    current.evidence.push({ id: 'exa:bio', kind: 'external', label: 'Marisol Vega biography', url: 'https://museum.org/marisol', text: 'Marisol Vega studied engineering at Eastlake. She co-founded Moonbeam. Marisol worked at Bluebird.' });
+    const result = await tryInstantContext(fixture.gate, current, signal());
+    expect(result).toMatchObject({ kind: 'cue', text: 'Possible match: Marisol Vega\n• Studied engineering at Eastlake\n• Co-founded Moonbeam\n• Worked at Bluebird', evidenceIds: ['exa:bio'] });
+    expect(result?.authorization?.verify(current)).toBe(true);
+    const questions = fixture.batch.mock.calls[0]![0].questions;
+    expect(Object.values(questions).every(question => question.type === 'noul')).toBe(true);
+    const final = fixture.batch.mock.calls[1]![0].questions.action!;
+    expect(final.type === 'choice' && Object.keys(final.criteria)).toEqual(['fact_card', '__hold__']);
+    const changed = structuredClone(current); changed.evidence[1]!.text += ' Correction.';
+    expect(result?.authorization?.verify(changed)).toBe(false);
+  });
+  it('keeps company capabilities attributed to the company rather than the introduced person', async () => {
+    const fixture = gate(); const current = input("Hi, I'm Marisol Vega from Northstar Labs.");
+    current.evidence.push({ id: 'exa:company', kind: 'external', label: 'Northstar Labs', url: 'https://northstarlabs.org/about', text: 'Northstar Labs builds modular compute systems. We develop industrial cooling systems.' });
+    const result = await tryInstantContext(fixture.gate, current, signal());
+    expect(result).toMatchObject({ kind: 'cue', text: 'Possible match: Northstar Labs — company claims\n• Builds modular compute systems\n• Develop industrial cooling systems' });
+    expect(result?.authorization?.verify(current)).toBe(true);
+  });
+  it('ranking never authorizes publication without the strict final gate', async () => {
+    const fixture = gate(true); const current = input();
+    current.evidence.push({ id: 'exa:bio', kind: 'external', label: 'Ada Lovelace biography', url: 'https://museum.org/ada', text: 'Ada Lovelace studied advanced mathematics.' });
+    expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'quiet' });
+    expect(fixture.batch).toHaveBeenCalledTimes(2);
   });
   it('never publishes partial speech, but explicitly authorized prefetch can select research only', async () => {
     const fixture = gate(); const partial = input(undefined, false);

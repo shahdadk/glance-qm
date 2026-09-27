@@ -6,11 +6,17 @@ The visible app is **kompX**. Its independent bundle ID remains `com.shahdad.gla
 
 Recorded on 2026-09-27:
 
-- Full simulator and signed iPhone builds succeed on this Mac's Xcode 26.1.1. The latest candidate passes ten XCTest tests, zero failures.
+- Full simulator and signed iPhone builds succeed on this Mac's Xcode 26.1.1. The latest native context-card candidate passes twelve XCTest tests, zero failures.
 - Real SDK configuration, Meta registration, DeviceSession startup, Display startup, and native card sends are verified. The wearer confirmed the lens counter.
 - Real glasses `MWDATSpeech` emits nonempty partial and final text. At 14:49:51, this rehearsal had 200 raw events, 52 accepted nonempty updates, six nonempty finals, and 52 authenticated HTTP uploads with status 200.
 - Wearer lens Pause/Resume are verified. Pause stops Speech and updates shared status while retaining Display/session. The wearer explicitly paused again at 14:50:37; that was not a capture failure.
 - The default demo keeps the lens visible with minimal Listening with Start/Pause; task and delivery actions appear contextually. Longer uninterrupted capture, grounded cue rendering, final summary/tasks/action review, and quiet/locked-phone behavior remain separate acceptance checks.
+
+Latest wearer feedback confirms that a contextual YC CEO fact appeared on the lens. This establishes one useful-context delivery beyond the earlier counter rehearsal; richer two-to-three-bullet context still needs wearer verification. A subsequent read-only device check found the paired iPhone unavailable to `devicectl`, so no fresh diagnostic render timestamp or current capture state was available. The saved 23:03:54Z diagnostic snapshot predates that feedback and must not be used as its render receipt.
+
+The native cue path preserves Unicode bullets and newline separators through `DisplayPagination`; pagination removes only whitespace at page boundaries. The latest signed build presents cues in the real DAT `FlexBox.background(.card)` container with padded, separate text rows. A person/company header retains any “Possible match” qualifier. The kompX wordmark and Start/Pause stay above the card; Details exposes the existing source view. Only cue presentation changes: eight-second expiry, pagination, and exact action-review identities are retained. General prose cues still work.
+
+At 23:23Z, the new signed card build was installed and its private replacement bridge configuration copied to the reconnected phone. Twelve native tests passed, including qualifier and bullet preservation. Before installation, fresh diagnostics showed Speech and DeviceSession stopped at 23:05:56Z, with 483 raw events, 106 accepted updates, seven finals, and 104 uploads. App launch was initially denied because the phone was locked, then succeeded at 23:23:49Z after unlock; richer-card appearance remains a physical acceptance check. No microphone was activated during installation.
 
 The official current samples document Xcode 26.4+/Swift 6.3+. Actual 1.0.0 interfaces and this app compile with installed Xcode 26.1.1. This is a measured compatibility result, not a general upstream support guarantee; the binary reports Swift 6.3.3.
 

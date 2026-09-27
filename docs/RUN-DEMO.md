@@ -40,7 +40,7 @@ This tracked bootstrap:
 
 Supply an authorized `OPENAI_API_KEY` through the shell or an existing authorized local Codex OAuth login. Provider secrets are never copied into Git. `QM_SOURCE_DIR`, `QM_RUNTIME_ENV`, and `QM_NODE_BIN` select alternate paths. Running without `--start` prepares the pinned checkout, private config, and image without starting or replacing the QM service.
 
-The original hackathon instance was booted from `/tmp/glance-qm-upstream`; its explicit `QM_SOURCE_DIR` remains in private runtime configuration so this live instance is preserved. Fresh installations default to the persistent user cache. If an existing upstream launcher has modified tracked dependency lockfiles, the bootstrap refuses that dirty checkout; select a fresh `QM_SOURCE_DIR` for reproduction instead of modifying the running instance. Do not remove a running instance's source checkout.
+The original `/tmp/glance-qm-upstream` checkout was lost during a host reboot. The restored instance uses `~/.local/share/glance-qm/qm-source`, retaining its existing signing secret, project, and database volumes. Fresh installations default to the persistent user cache. If an existing upstream launcher has modified tracked dependency lockfiles, the bootstrap refuses that dirty checkout; select a fresh `QM_SOURCE_DIR` for reproduction instead of modifying the running instance. Do not remove a running instance's source checkout. See [QM-SETUP.md](QM-SETUP.md) for reboot recovery.
 
 ## Fresh clone: GBrain and optional providers
 
@@ -64,11 +64,17 @@ Freshly approved Google credentials in private `google.env` supersede stale inhe
 Provider settings are loaded at backend startup. After changing provider config or backend implementation, restart the owned app processes:
 
 ```sh
-node scripts/stop-demo.mjs
+node scripts/stop-demo.mjs --backend-only
 node scripts/start-demo.mjs
 ```
 
 `stop-demo.mjs` verifies each recorded PID's start time and exact command before signalling it. It preserves pre-existing Vite, QM, GBrain, Docker, database volumes, and the separate Glance service on 8787. It refuses stale or mismatched ownership records. A changed config causes `start-demo.mjs` to request this explicit restart rather than replacing another process.
+
+Use `--backend-only` for a backend update to preserve the running tunnel and
+phone pairing URL. Omitting the flag also stops the recorded frontend and
+tunnel. During a provider outage, `start-demo.mjs --recover-backend` explicitly
+restores app transport and direct research without claiming QM/GBrain readiness;
+run the normal launcher after provider recovery to verify their connections.
 
 Private logs are `.local/demo-backend.log`, `.local/demo-web.log` if the launcher owns Vite, and `.local/demo-typecheck.log`. The public `/api/health` endpoint contains nonsecret readiness labels. Authenticated project/MCP preflight establishes connectivity; only completed integration receipts establish successful model, memory, document, or calendar work.
 

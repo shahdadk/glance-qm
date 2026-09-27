@@ -18,13 +18,28 @@ const started = Date.now();
 let report;
 try {
   const meeting = await controller.create({ title: `SYNTHETIC rolling-memory checkpoint ${new Date().toISOString()}` });
-  await controller.append(meeting.id, { segmentId: 'synthetic-live-memory-1', revision: 1, isFinal: true, speaker: 'synthetic-qa', text: 'Synthetic checkpoint: the team agreed the prototype will work locally. The next discussion will compare two interface sketches. No messages, invitations, or external delivery are requested.' });
+  const checkpoints = [];
   let snapshot;
-  const until = Date.now() + 35000;
-  while (Date.now() < until) { snapshot = await controller.get(meeting.id); if (['saved', 'failed'].includes(snapshot.memoryCheckpoint?.state)) break; await new Promise(resolve => setTimeout(resolve, 100)); }
-  const checkpoint = snapshot.memoryCheckpoint;
-  const sameContext = snapshot.summaryContextDigest === checkpoint?.contextDigest;
-  report = { verifiedAt: new Date().toISOString(), scope: 'Synthetic isolated live QM summary and GBrain save/readback; no End call and no physical-speech claim.', meetingId: meeting.id, elapsedMs: Date.now() - started, passed: snapshot.status === 'listening' && snapshot.finalization.state === 'not_started' && checkpoint?.state === 'saved' && Boolean(checkpoint.receipt?.id) && sameContext, meetingStatus: snapshot.status, finalizationState: snapshot.finalization.state, checkpointState: checkpoint?.state, receiptId: checkpoint?.receipt?.id, savedAt: checkpoint?.savedAt, sameContext, summaryPresent: Boolean(snapshot.summary), warningCodes: snapshot.warnings.map(warning => warning.code), error: checkpoint?.error };
+  for (const [index, text] of [
+    'Synthetic checkpoint: the team agreed the prototype will work locally. The next discussion will compare two interface sketches. No messages, invitations, or external delivery are requested.',
+    'Synthetic checkpoint update: the team compared both interface sketches and selected the second sketch. The prototype still works locally. No messages, invitations, or external delivery are requested.',
+  ].entries()) {
+    await controller.append(meeting.id, { segmentId: `synthetic-live-memory-${index + 1}`, revision: 1, isFinal: true, speaker: 'synthetic-qa', text });
+    const previousDigest = checkpoints.at(-1)?.contextDigest;
+    const until = Date.now() + 60000;
+    while (Date.now() < until) {
+      snapshot = await controller.get(meeting.id);
+      const checkpoint = snapshot.memoryCheckpoint;
+      if (checkpoint?.contextDigest !== previousDigest && ['saved', 'failed'].includes(checkpoint?.state)) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const checkpoint = snapshot.memoryCheckpoint;
+    checkpoints.push({ sequence: index + 1, state: checkpoint?.state, contextDigest: checkpoint?.contextDigest, receiptId: checkpoint?.receipt?.id, savedAt: checkpoint?.savedAt, sameContext: snapshot.summaryContextDigest === checkpoint?.contextDigest, summaryRevision: snapshot.summary?.revision, error: checkpoint?.error });
+    if (checkpoint?.state !== 'saved' || checkpoint?.contextDigest === previousDigest) break;
+  }
+  const distinctContexts = checkpoints.length === 2 && checkpoints[0].contextDigest !== checkpoints[1].contextDigest;
+  const distinctReceipts = checkpoints.length === 2 && checkpoints[0].receiptId !== checkpoints[1].receiptId;
+  report = { verifiedAt: new Date().toISOString(), scope: 'Two successive synthetic isolated live QM summaries and GBrain saves/readbacks to the same meeting page; no End call and no physical-speech claim.', meetingId: meeting.id, pageSlug: `chan-glance-demo/meetings/${meeting.id.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120)}`, elapsedMs: Date.now() - started, passed: snapshot.status === 'listening' && snapshot.finalization.state === 'not_started' && distinctContexts && distinctReceipts && checkpoints.every(checkpoint => checkpoint.state === 'saved' && Boolean(checkpoint.receiptId) && checkpoint.sameContext), meetingStatus: snapshot.status, finalizationState: snapshot.finalization.state, distinctContexts, distinctReceipts, checkpoints, warningCodes: snapshot.warnings.map(warning => warning.code) };
   console.log(JSON.stringify(report));
   if (!report.passed) process.exitCode = 1;
 } finally {

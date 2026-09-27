@@ -1,6 +1,6 @@
 # Real QM development runtime
 
-Glance runs against upstream [yc-software/qm](https://github.com/yc-software/qm), pinned to commit `a5a36675041a85e30b9ff3632f678ba36837aabf` (package version `0.1.0`). The upstream checkout stays outside this submission at `/tmp/glance-qm-upstream`. Do not remove it while the demo runs: QM's supervisor retires an instance whose checkout disappears.
+Glance runs against upstream [yc-software/qm](https://github.com/yc-software/qm), pinned to commit `a5a36675041a85e30b9ff3632f678ba36837aabf` (package version `0.1.0`). The upstream checkout stays outside this submission at `~/.local/share/glance-qm/qm-source`. Do not remove it while the demo runs: QM's supervisor retires an instance whose checkout disappears. The previous `/tmp` checkout was lost on a host reboot; use a persistent source path.
 
 ## Verified local instance
 
@@ -35,6 +35,30 @@ scripts/qm-runtime.sh logs core
 node scripts/qm-provision.mjs
 node scripts/qm-verify.mjs
 ```
+
+After a host reboot, restore the dedicated VM before starting the application.
+The existing project, signing secret, and database volumes must be preserved:
+
+```sh
+QM_SOURCE_DIR="$HOME/.local/share/glance-qm/qm-source" node scripts/qm-bootstrap.mjs
+scripts/qm-runtime.sh up --surface web
+python3 scripts/gbrain-service.py start
+node scripts/start-demo.mjs
+node scripts/tunnel-demo.mjs
+```
+
+The bootstrap without `--start` restores the pinned checkout and dependencies;
+it does not provision a new project. The temporary tunnel hostname changes if
+its process died during reboot, so import the regenerated private pairing file
+on the phone. Provider configuration in `/api/health` is not a connectivity
+receipt; the normal launcher verifies authenticated QM/GBrain readiness.
+
+If the VM is still recovering, `node scripts/start-demo.mjs --recover-backend`
+can restore speech transport and direct Exa/Jev cards first. It preserves normal
+authentication and process-ownership checks, but explicitly skips QM/GBrain
+connectivity preflight and records that limitation in local process state. QM
+summaries and GBrain writes remain unavailable until their services recover.
+Run the normal launcher again after recovery to verify those connections.
 
 `up` uses the official upstream dev-instance launcher, reloads changed environment, and preserves the durable database. The upstream doctor compares the entire inherited shell environment and currently reports an environment-drift warning even immediately after a successful reload; all core/web/portal, Git, and Docker checks are healthy. This warning has not prevented verified model or sandbox execution. `down` stops only this QM lease:
 

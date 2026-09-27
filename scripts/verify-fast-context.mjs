@@ -25,10 +25,11 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const events = () => existsSync(timingPath) ? readFileSync(timingPath, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
 const cases = [];
 const asr = process.argv.includes('--asr');
+const facts = process.argv.includes('--facts');
 const isHeld = choice => choice.choice === '__hold__' || choice.confidence < 0.8 || choice.chosenProbability < 0.8;
 async function api(path, body) { const response = await fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(3000) }); if (!response.ok) throw new Error(`Isolated API returned ${response.status}`); return response.json(); }
-async function runCase(prefetch, negative = false) {
-  const label = negative ? 'ambiguous-name' : asr ? 'asr-corrected-name' : prefetch ? 'prefetched' : 'cold';
+async function runCase(prefetch, negative = false, scenario) {
+  const label = scenario?.label || (negative ? 'ambiguous-name' : asr ? 'asr-corrected-name' : prefetch ? 'prefetched' : 'cold');
   const meeting = await api('/api/meetings', { title: `SYNTHETIC isolated fast-context ${label}` });
   const ws = new WebSocket(`ws://127.0.0.1:${port}/api/meetings/${meeting.id}/events`);
   let cueAt; let latest;
@@ -37,7 +38,7 @@ async function runCase(prefetch, negative = false) {
   await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
   const startIndex = events().length;
   const segmentId = `fast-${label}`;
-  const text = negative ? "I'm John Smith." : asr ? "I’m Gary Tatten. I’m Gary Tan." : "I'm Garry Tan.";
+  const text = scenario?.text || (negative ? "I'm John Smith." : asr ? "I’m Gary Tatten. I’m Gary Tan." : "I'm Garry Tan.");
   let partialAt;
   if (prefetch) {
     partialAt = Date.now();
@@ -49,7 +50,7 @@ async function runCase(prefetch, negative = false) {
   const submittedAt = Date.now();
   const accepted = await api(`/api/meetings/${meeting.id}/transcript`, { segmentId, revision: prefetch ? 2 : 1, isFinal: true, text, speaker: 'synthetic-qa' });
   const receivedAt = Date.parse(accepted.transcript.find(segment => segment.id === segmentId).capturedAt);
-  const until = Date.now() + 12000;
+  const until = Date.now() + (facts ? 45000 : 12000);
   while (Date.now() < until) {
     latest = await api(`/api/meetings/${meeting.id}`);
     if (latest.cue && latest.decisionReceipts?.some(receipt => receipt.kind === 'cue')) break;
@@ -62,7 +63,10 @@ async function runCase(prefetch, negative = false) {
   const started = phase => stageEvents.find(event => event.phase === phase && event.event === 'start')?.at;
   const cueReceipt = latest.decisionReceipts?.find(receipt => receipt.kind === 'cue');
   const external = latest.cue?.evidence?.filter(evidence => evidence.kind === 'external') || [];
+  const bullets = (latest.cue?.text || '').split('\n').filter(line => /^•\s+\S/.test(line));
+  const cardChecks = facts ? { multipleBullets: bullets.length >= 2 && bullets.length <= 3, hasSourceURLs: external.length > 0 && external.every(source => /^https?:\/\//.test(source.url || '')), qualifiedProfile: /possible match/i.test(latest.cue?.text || ''), novelBackground: bullets.some(line => /stanford|education|engineering|palantir|posterous|founded|data centers?|infrastructure|comput|cooling|energy|caffeine|sugar|calori|drink|beverage/i.test(line)) } : undefined;
   const result = { label, meetingId: meeting.id, passed: negative ? !latest.cue && stageEvents.some(event => event.choices?.some(isHeld)) : Boolean(cueAt && latest.cue && external.length && cueReceipt && stageEvents.some(event => event.provider === 'exa' && event.status === 200) && !stageEvents.some(event => event.provider === 'qm')), submittedAt, finalReceivedAt: receivedAt, partialLeadMs: partialAt ? receivedAt - partialAt : undefined, jevLookupStartedAt: started('jev_lookup'), jevLookupCompleteAt: complete('jev_lookup'), exaCompleteAt: complete('exa'), jevCueCompleteAt: complete('jev_cue_authorize', true), cueReceiptAt: cueReceipt?.receipt?.issuedAt, snapshotObservedAt: cueAt, finalToSnapshotMs: cueAt ? cueAt - receivedAt : undefined, cue: latest.cue?.text, sourceURLs: external.map(evidence => evidence.url), finalCueReceiptId: cueReceipt?.receiptId, acceptedResearchReceipts: latest.decisionReceipts?.filter(receipt => receipt.kind === 'research').length || 0, qmCalls: stageEvents.filter(event => event.provider === 'qm' && event.event === 'start').length, stages: stageEvents };
+  if (cardChecks) { result.cardChecks = cardChecks; result.bullets = bullets; result.passed &&= Object.values(cardChecks).every(Boolean); }
   cases.push(result); console.log(JSON.stringify(result));
   ws.close(); await api(`/api/meetings/${meeting.id}/control`, { action: 'pause' });
 }
@@ -70,11 +74,14 @@ try {
   let ready = false;
   for (let n = 0; n < 100; n++) { try { ready = (await api('/api/health')).decisionMode === 'jev-native'; } catch {} if (ready) break; if (child.exitCode !== null) throw new Error('Isolated backend exited'); await wait(50); }
   if (!ready) throw new Error('Isolated backend did not become ready');
-  await runCase(false); if (asr) await runCase(false, true); else await runCase(true);
+  if (facts) {
+    await runCase(false, false, { label: 'garry-background-card', text: "I'm Garry Tan from Y Combinator." });
+    await runCase(false, false, { label: 'sajan-liquid-energy-card', text: "I'm Sajan Khosa from Liquid Energy." });
+  } else { await runCase(false); if (asr) await runCase(false, true); else await runCase(true); }
 } catch (error) { console.error(error.message); process.exitCode = 1; }
 finally {
   if (child.exitCode === null) child.kill('SIGTERM');
   const report = { verifiedAt: new Date().toISOString(), isolatedPort: port, cases, scope: 'Synthetic isolated API/WS probes. No main-room input, delivery, or physical speech claim.' };
-  writeFileSync(join(root, asr ? '.local/fast-context-asr-verification.json' : '.local/fast-context-verification.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
+  writeFileSync(join(root, facts ? '.local/fact-card-verification.json' : asr ? '.local/fast-context-asr-verification.json' : '.local/fast-context-verification.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
   if (cases.length !== 2 || cases.some(result => !result.passed)) process.exitCode = 1;
 }

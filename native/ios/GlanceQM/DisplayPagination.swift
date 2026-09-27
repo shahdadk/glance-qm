@@ -1,5 +1,20 @@
 import Foundation
 
+/// Presentation only: keeps uncertainty qualifiers and every fact supplied by the server.
+struct ContextCardContent: Equatable {
+    let heading: String?
+    let rows: [String]
+
+    init(text: String) {
+        var lines = text.components(separatedBy: "\n")
+        if lines.count > 1, lines.dropFirst().contains(where: { $0.hasPrefix("•") }),
+           let first = lines.first, !first.isEmpty, !first.hasPrefix("•") {
+            heading = lines.removeFirst()
+        } else { heading = nil }
+        rows = lines
+    }
+}
+
 /// Small deterministic pages; exact calendar details remain available before confirmation.
 struct DisplayPagination: Equatable {
     let pages: [String]

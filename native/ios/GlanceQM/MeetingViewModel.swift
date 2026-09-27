@@ -722,7 +722,10 @@ final class MeetingViewModel: ObservableObject {
         if hasContextNotice {
             secondary = { [weak self] in guard let self else { return }; Task { if self.isCapturing { await self.pause() } else { await self.startListening(source: "lens") } } }
         } else { secondary = { [weak self] in self?.returnToListening() } }
-        glasses.render(GlassesCard(title: heading, body: pager.current, primaryLabel: primaryLabel, secondaryLabel: secondaryLabel, primary: primaryAction, secondary: secondary, showsSecondary: showsSecondary, identity: key + "-\(pager.index)"))
+        glasses.render(GlassesCard(title: heading, body: pager.current, primaryLabel: primaryLabel, secondaryLabel: secondaryLabel, primary: primaryAction, secondary: secondary, showsSecondary: showsSecondary, identity: key + "-\(pager.index)", isContextCard: focus == .cue && meeting.cue != nil, captureLabel: isCapturing ? "Pause" : "Start", captureAction: { [weak self] in
+            guard let self else { return }
+            Task { if self.isCapturing { await self.pause() } else { await self.startListening(source: "lens") } }
+        }, sourceLabel: meeting.cue?.evidence.isEmpty == false ? "Sources in Details" : "Context"))
 
     }
 }

@@ -29,6 +29,10 @@ struct GlassesCard {
     var showsButtons = true
     var showsSecondary = true
     var identity: String?
+    var isContextCard = false
+    var captureLabel: String = "Pause"
+    var captureAction: (() -> Void)?
+    var sourceLabel: String = "Context"
 }
 
 /// One real DAT DeviceSession owns both Speech and Display. No simulated device is created.
@@ -412,7 +416,7 @@ final class MetaGlassesController: ObservableObject {
         pendingCard = card
         #if !GLANCE_PHONE_ONLY
         guard displayReady, let display else { return }
-        let key = [card.title, card.body, card.primaryLabel, card.secondaryLabel, String(card.showsButtons), String(card.showsSecondary), card.identity ?? ""].joined(separator: "\u{1F}")
+        let key = [card.title, card.body, card.primaryLabel, card.secondaryLabel, String(card.showsButtons), String(card.showsSecondary), card.identity ?? "", String(card.isContextCard), card.captureLabel, card.sourceLabel].joined(separator: "\u{1F}")
         guard key != lastRenderedKey else { return }
         lastRenderedKey = key
         let current = generation
@@ -425,7 +429,18 @@ final class MetaGlassesController: ObservableObject {
                 try await display.send(
                     FlexBox(direction: .column, spacing: 12, alignment: .start, crossAlignment: .center) {
                         Text("kompX", style: .heading).alignSelf(.center)
-                        if card.showsButtons { ButtonGroup(alignment: .center) {
+                        if card.isContextCard {
+                            ButtonGroup(alignment: .center) {
+                                Button(label: card.captureLabel, style: .primary, onClick: { [weak self] in
+                                    Task { @MainActor in
+                                        guard let self, self.generation == current, self.lastRenderedKey == key else { return }
+                                        NativeDiagnostics.record(["lastLensTapAt": ISO8601DateFormatter().string(from: Date()), "lastLensButton": card.captureLabel])
+                                        card.captureAction?()
+                                    }
+                                })
+                            }
+                        }
+                        if card.showsButtons && !card.isContextCard { ButtonGroup(alignment: .center) {
                             Button(label: card.primaryLabel, style: .primary, onClick: { [weak self] in
                                 Task { @MainActor in
                                     guard let self, self.generation == current, self.lastRenderedKey == key else { return }
@@ -441,7 +456,27 @@ final class MetaGlassesController: ObservableObject {
                                 }
                             }) }
                         } }
-                        if card.title != "kompX" || !card.body.isEmpty {
+                        if card.isContextCard {
+                            FlexBox(direction: .column, spacing: 8, alignment: .start, crossAlignment: .stretch) {
+                                Text(ContextCardContent(text: card.body).heading ?? card.title, style: .body)
+                                for row in ContextCardContent(text: card.body).rows {
+                                    if !row.isEmpty { Text(row, style: .body) }
+                                }
+                                Text(card.sourceLabel, style: .meta, color: .secondary)
+                                ButtonGroup(alignment: .center) {
+                                    Button(label: card.primaryLabel, style: .secondary, onClick: { [weak self] in
+                                        Task { @MainActor in
+                                            guard let self, self.generation == current, self.lastRenderedKey == key else { return }
+                                            NativeDiagnostics.record(["lastLensTapAt": ISO8601DateFormatter().string(from: Date()), "lastLensButton": card.primaryLabel])
+                                            card.primary?()
+                                        }
+                                    }).actionRole(.primary)
+                                }
+                            }
+                            .padding(12)
+                            .background(.card)
+                            .alignSelf(.stretch)
+                        } else if card.title != "kompX" || !card.body.isEmpty {
                             FlexBox(direction: .column, spacing: 8, alignment: .start, crossAlignment: .stretch) {
                                 if card.title != "kompX" { Text(card.title, style: .body, color: .secondary) }
                                 if !card.body.isEmpty { Text(card.body, style: .body) }
