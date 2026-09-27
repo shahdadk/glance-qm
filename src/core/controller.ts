@@ -50,6 +50,18 @@ interface Loop {
   lastCueAt: number;
   lastJudgedRevision: number;
   manual?: boolean;
+  immediate?: boolean;
+}
+interface PartialPrefetch {
+  pending?: { segmentId: string; text: string; revision: number; epoch: number; readyAt: number; key: string };
+  timer?: ReturnType<typeof setTimeout>;
+  inFlight?: Promise<void>;
+  abort?: AbortController;
+  activeEpoch?: number;
+  lastKey?: string;
+  budgetContext?: number;
+  attempts?: number;
+  cached?: { segmentId: string; text: string; epoch: number; evidence: Evidence[] };
 }
 export interface ControllerOptions {
   directory: string;
@@ -71,6 +83,7 @@ export class MeetingController extends EventEmitter {
   private summaries = new Map<string, Promise<void>>();
   private actionRuns = new Map<string, Promise<void>>();
   private taskRuns = new Map<string, Promise<void>>();
+  private prefetches = new Map<string, PartialPrefetch>();
   private interval: ReturnType<typeof setInterval>;
   private closed = false;
   private options: Required<Omit<ControllerOptions, 'providers' | 'directory'>>;
@@ -225,6 +238,10 @@ export class MeetingController extends EventEmitter {
       return input.isFinal;
     });
     this.publish(update.value);
+    const prefetch = this.prefetches.get(id);
+    if (prefetch?.cached && prefetch.cached.epoch !== update.value.correctionEpoch) delete prefetch.cached;
+    if ((prefetch?.pending && prefetch.pending.epoch !== update.value.correctionEpoch) || (prefetch?.activeEpoch !== undefined && prefetch.activeEpoch !== update.value.correctionEpoch)) this.stopPrefetch(id);
+    if (!input.isFinal) this.schedulePrefetch(update.value, input.segmentId);
     if (update.result) this.schedule(id);
     return update.value;
   }
@@ -246,6 +263,7 @@ export class MeetingController extends EventEmitter {
       if (value.actionExecution?.state === 'proposed') { value.actionExecution.state = 'cancelled'; if (value.calendarAction) value.calendarAction.status = 'cancelled'; }
     });
     this.publish(update.value);
+    this.stopPrefetch(id);
     this.schedule(id, true);
     return update.value;
   }
@@ -261,6 +279,7 @@ export class MeetingController extends EventEmitter {
     const loop = this.loops.get(id);
     if (loop?.timer) { clearTimeout(loop.timer); delete loop.timer; }
     if (loop) loop.pending = false;
+    this.stopPrefetch(id);
     this.publish(update.value);
     if (update.result) this.startFinalizer(id);
     return update.value;
@@ -331,27 +350,101 @@ export class MeetingController extends EventEmitter {
     }
   }
 
-  private schedule(id: string, manual = false): void {
+  private schedule(id: string, manual = false, immediate = false): void {
     if (this.closed) return;
     let loop = this.loops.get(id);
     if (!loop) { loop = { pending: false, lastCueAt: 0, lastJudgedRevision: -1 }; this.loops.set(id, loop); }
     loop.pending = true;
     if (manual) loop.manual = true;
+    if (immediate) loop.immediate = true;
     loop.firstPending ??= this.options.now();
     if (loop.inFlight) return;
     if (loop.timer) clearTimeout(loop.timer);
     const now = this.options.now();
-    const delay = Math.max(0, Math.min(this.options.debounceMs, loop.firstPending + this.options.maxWaitMs - now), loop.manual ? 0 : loop.lastCueAt + this.options.cooldownMs - now);
+    // Attention pacing applies at cue publication, never to background retrieval.
+    const delay = loop.immediate ? 0 : Math.max(0, Math.min(this.options.debounceMs, loop.firstPending + this.options.maxWaitMs - now));
     loop.timer = setTimeout(() => {
       delete loop!.timer;
       loop!.pending = false; delete loop!.firstPending;
       const explicit = loop!.manual === true; delete loop!.manual;
+      delete loop!.immediate;
       loop!.inFlight = this.judge(id, loop!, false, explicit).catch(error => this.warning(id, 'ambient_unavailable', this.errorText(error))).finally(() => {
         delete loop!.inFlight;
         if (loop!.pending && !this.closed) this.schedule(id);
       });
     }, delay);
     loop.timer.unref();
+  }
+
+  private normalizedPartial(text: string): string { return text.trim().replace(/\s+/g, ' ').toLowerCase().replace(/[.!?,;:]+$/, ''); }
+
+  private compatiblePartial(finalText: string, partialText: string): boolean {
+    const final = this.normalizedPartial(finalText); const partial = this.normalizedPartial(partialText);
+    // Never reuse a shorter literal identity as a prefix of a different name
+    // (for example a synthetic "Doe" becoming "Doerr"). Final Jev still rechecks relevance.
+    return final === partial || (final.startsWith(partial) && /^[\s.,!?;:—–-]/.test(final.slice(partial.length)));
+  }
+
+  private prefetchedEvidence(record: MeetingRecord): Evidence[] {
+    const cached = this.prefetches.get(record.id)?.cached;
+    if (!cached || cached.epoch !== record.correctionEpoch) return [];
+    const final = record.transcript.find(segment => segment.id === cached.segmentId && segment.isFinal);
+    return final && this.compatiblePartial(final.text, cached.text) ? cached.evidence : [];
+  }
+
+  private stopPrefetch(id: string): void {
+    const state = this.prefetches.get(id);
+    if (!state) return;
+    if (state.timer) clearTimeout(state.timer);
+    state.abort?.abort(); delete state.pending; delete state.cached; delete state.timer;
+  }
+
+  private schedulePrefetch(record: MeetingRecord, segmentId: string): void {
+    if (!this.providers.prefetch || this.closed || record.status !== 'listening') return;
+    const segment = record.transcript.find(item => item.id === segmentId && !item.isFinal);
+    if (!segment || !this.normalizedPartial(segment.text)) return;
+    let state = this.prefetches.get(record.id);
+    if (!state) { state = {}; this.prefetches.set(record.id, state); }
+    if (state.budgetContext !== this.contextRevision(record)) { state.budgetContext = this.contextRevision(record); state.attempts = 0; }
+    const key = `${record.correctionEpoch}:${segment.id}:${this.normalizedPartial(segment.text)}`;
+    if (state.pending?.key === key || state.lastKey === key) return;
+    state.abort?.abort();
+    if (state.timer) clearTimeout(state.timer);
+    if ((state.attempts ?? 0) >= 6) { delete state.pending; delete state.timer; return; }
+    state.pending = { segmentId, text: segment.text, revision: segment.revision, epoch: record.correctionEpoch, readyAt: this.options.now() + 200, key };
+    this.armPrefetch(record.id, state);
+  }
+
+  private armPrefetch(id: string, state: PartialPrefetch): void {
+    if (this.closed || state.inFlight || !state.pending) return;
+    state.timer = setTimeout(() => {
+      delete state.timer;
+      const attempt = state.pending!; delete state.pending;
+      state.attempts = (state.attempts ?? 0) + 1;
+      state.lastKey = attempt.key; state.abort = new AbortController();
+      state.activeEpoch = attempt.epoch;
+      const abort = state.abort;
+      state.inFlight = (async () => {
+        const record = await this.get(id);
+        if (record.status === 'ended' || record.correctionEpoch !== attempt.epoch || abort.signal.aborted) return;
+        const input = this.input(record);
+        const sources = evidenceSchema.array().parse(await bounded(signal => this.providers.prefetch!({ ...input, partialTranscript: [{ id: attempt.segmentId, text: attempt.text, revision: attempt.revision, isFinal: false, capturedAt: this.iso() }] }, AbortSignal.any([signal, abort.signal])), 4000));
+        const latest = await this.get(id);
+        const segment = latest.transcript.find(item => item.id === attempt.segmentId);
+        if (abort.signal.aborted || latest.status === 'ended' || latest.correctionEpoch !== attempt.epoch || !segment) return;
+        const compatible = segment.isFinal ? this.compatiblePartial(segment.text, attempt.text) : this.normalizedPartial(segment.text) === this.normalizedPartial(attempt.text);
+        if (!compatible) return;
+        state.cached = { segmentId: attempt.segmentId, text: attempt.text, epoch: attempt.epoch, evidence: sources.filter(item => item.kind === 'external').slice(0, 4) };
+        if (segment.isFinal && state.cached.evidence.length) {
+          const loop = this.loops.get(id); if (loop) loop.lastJudgedRevision = -1;
+          this.schedule(id, latest.status === 'paused', true);
+        }
+      })().catch(() => { /* Speculation has no user-visible facts; normal final judgment remains authoritative. */ }).finally(() => {
+        delete state.inFlight; delete state.abort; delete state.activeEpoch;
+        if (state.pending) this.armPrefetch(id, state);
+      });
+    }, Math.max(0, state.pending.readyAt - this.options.now()));
+    state.timer.unref();
   }
 
   private input(record: MeetingRecord, complete = false): AmbientInput {
@@ -362,7 +455,8 @@ export class MeetingController extends EventEmitter {
     const recentTranscript = recent.reverse().filter(segment => { size += segment.text.length; return complete || size <= 14000; }).reverse();
     const operatorMessages = record.operatorMessages.slice(-8);
     const anchor: ContextAnchor = { meetingId: record.id, revision: record.revision, contextRevision: this.contextRevision(record), contextDigest: this.contextDigest(record), correctionEpoch: record.correctionEpoch, finalCount: finals.length, capturedAt: this.options.now(), ...(finals.at(-1) ? { lastSegmentId: finals.at(-1)!.id } : {}) };
-    return structuredClone({ anchor, meeting: { id: record.id, title: record.title, participants: record.participants, tasks: record.tasks.map(task => ({ id: task.id, title: task.title, status: task.status })), ...(record.calendarAction ? { calendarAction: record.calendarAction } : {}), ...(record.attendeeLabels ? { attendeeLabels: record.attendeeLabels } : {}), ...(record.summary ? { summary: record.summary } : {}) }, recentTranscript, evidence: [...recentTranscript.map(segment => ({ id: `transcript:${segment.id}:${segment.revision}`, label: segment.speaker ? `Transcript · ${segment.speaker}` : 'Transcript · unknown speaker', text: segment.text, kind: 'transcript' as const })), ...operatorMessages.map(message => ({ id: `message:${message.id}`, label: 'Authenticated operator message', text: message.text, kind: 'transcript' as const })), ...record.memoryEvidence, ...(record.externalEvidence ?? [])], operatorMessages });
+    const sources = [...record.memoryEvidence, ...(record.externalEvidence ?? []), ...this.prefetchedEvidence(record)].filter((item, index, items) => items.findIndex(other => other.id === item.id) === index);
+    return structuredClone({ anchor, meeting: { id: record.id, title: record.title, participants: record.participants, tasks: record.tasks.map(task => ({ id: task.id, title: task.title, status: task.status })), ...(record.calendarAction ? { calendarAction: record.calendarAction } : {}), ...(record.attendeeLabels ? { attendeeLabels: record.attendeeLabels } : {}), ...(record.summary ? { summary: record.summary } : {}) }, recentTranscript, evidence: [...recentTranscript.map(segment => ({ id: `transcript:${segment.id}:${segment.revision}`, label: segment.speaker ? `Transcript · ${segment.speaker}` : 'Transcript · unknown speaker', text: segment.text, kind: 'transcript' as const })), ...operatorMessages.map(message => ({ id: `message:${message.id}`, label: 'Authenticated operator message', text: message.text, kind: 'transcript' as const })), ...sources], operatorMessages });
   }
 
   private async judge(id: string, loop: Loop, finalizing = false, manual = false): Promise<void> {
@@ -371,6 +465,7 @@ export class MeetingController extends EventEmitter {
     const expectedStatus = record.status;
     if (!this.providers.configured.qm) return;
     const input = this.input(record, finalizing);
+    const usedPrefetchedSources = this.prefetchedEvidence(record).length > 0;
     if (finalizing) input.purpose = 'finalization';
     if (!input.recentTranscript.length && !input.operatorMessages.length) return;
     loop.lastJudgedRevision = this.contextRevision(record);
@@ -382,6 +477,7 @@ export class MeetingController extends EventEmitter {
     }
     const judgment = judgmentSchema.parse(providerJudgment);
     if (this.providers.decisionMode === 'jev-native' && judgment.kind !== 'quiet' && !providerJudgment.authorization) throw new Error('Jev-native action has no authorization receipt; the result was rejected.');
+    if (judgment.kind !== 'quiet' && usedPrefetchedSources && !providerJudgment.authorization) throw new Error('Prefetched public context requires a fresh final-context Jev receipt; the result was rejected.');
     if (finalizing && judgment.kind !== 'task' && judgment.kind !== 'cancel_task') return;
     const authorized = (value: MeetingRecord): boolean => {
       const current = this.input(value, finalizing);
@@ -422,7 +518,7 @@ export class MeetingController extends EventEmitter {
         }
         return true;
       });
-      if (update.result) { loop.lastJudgedRevision = -1; this.schedule(id, manual || update.value.status === 'paused'); }
+      if (update.result) { loop.lastJudgedRevision = -1; this.schedule(id, manual || update.value.status === 'paused', true); }
       return;
     }
     const update = await this.store.update(id, value => {
@@ -669,9 +765,10 @@ export class MeetingController extends EventEmitter {
   async waitForIdle(id: string): Promise<void> {
     for (let count = 0; count < 1000; count++) {
       const loop = this.loops.get(id);
-      const runs = [loop?.inFlight, this.finalizers.get(id), this.summaries.get(id), ...this.actionRuns.values(), ...this.taskRuns.values()].filter(Boolean) as Promise<void>[];
+      const prefetch = this.prefetches.get(id);
+      const runs = [loop?.inFlight, prefetch?.inFlight, this.finalizers.get(id), this.summaries.get(id), ...this.actionRuns.values(), ...this.taskRuns.values()].filter(Boolean) as Promise<void>[];
       if (runs.length) await Promise.allSettled(runs);
-      else if (loop?.timer) await new Promise(resolve => setTimeout(resolve, 5));
+      else if (loop?.timer || prefetch?.timer) await new Promise(resolve => setTimeout(resolve, 5));
       else return;
     }
     throw new Error('Controller did not settle');
@@ -679,7 +776,8 @@ export class MeetingController extends EventEmitter {
 
   async close(): Promise<void> {
     this.closed = true; clearInterval(this.interval);
+    for (const id of this.prefetches.keys()) this.stopPrefetch(id);
     for (const loop of this.loops.values()) { if (loop.timer) clearTimeout(loop.timer); loop.pending = false; }
-    await Promise.allSettled([...this.loops.values()].flatMap(loop => loop.inFlight ? [loop.inFlight] : []).concat([...this.finalizers.values()], [...this.summaries.values()], [...this.actionRuns.values()], [...this.taskRuns.values()]));
+    await Promise.allSettled([...this.loops.values()].flatMap(loop => loop.inFlight ? [loop.inFlight] : []).concat([...this.finalizers.values()], [...this.summaries.values()], [...this.actionRuns.values()], [...this.taskRuns.values()], [...this.prefetches.values()].flatMap(state => state.inFlight ? [state.inFlight] : [])));
   }
 }

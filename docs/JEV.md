@@ -114,3 +114,47 @@ The old Glance provider was inspected only for designated configuration names;
 this adapter was implemented from the current official contract. No old
 credential, private transcript, runtime state, or provider implementation was
 copied.
+
+## Experimental instant public context
+
+`instant-context.ts` supplies bounded literal name spans from introductory
+speech to Jev, which decides whether a public lookup is appropriate. The core
+performs Exa research. A subsequent Jev gate chooses a complete, verbatim short
+source sentence versus hold. No QM text generation is needed on this narrow
+path. The source cue always says **Possible match**; it does not authenticate
+the speaker. Neither face identification nor a hardcoded person catalog is used.
+
+This path is opt-in: set `GLANCE_INSTANT_CONTEXT=true` together with
+`GLANCE_DECISION_MODE=jev-native`. The default is `false`, so ordinary runtime
+startup and the primary QM decision path do not prefetch public sources.
+
+Sentence segmentation uses `Intl.Segmenter`, preserving decimals and negation.
+Sentences longer than 145 characters are omitted intact, so the uncertainty
+label fits within a 160-character cue. Publication retains the existing 0.8
+probability and confidence floors. A single source candidate is selected by
+search ranking before Jev's publish/hold choice; competing equally useful facts
+do not dilute its distribution. Ordinary non-introduction work uses the general
+provider path. A held decision does not authorize publication.
+
+Live standalone helper measurements on September 27, 2026 around 15:51 PDT:
+
+| Input / path | Actual result |
+| --- | --- |
+| “I’m Garry Tan”, no supplied sources | 638 ms: research gate 138 ms, Exa 358 ms, final gate 142 ms. Source-backed cue selected at probability 0.99 / confidence 0.99. |
+| “Hi, I’m John Smith.” | 376 ms; held because the final confidence 0.72 did not meet the unchanged 0.8 policy. No cue authorized. |
+| Stable partial “I’m Garry Tan”, then identical final text | Partial lookup preparation 716 ms, then final-to-cue 121 ms with supplied sources. Final probability 0.99 / confidence 0.98. |
+
+The positive cue was “Possible match: Garry Tan is president and CEO of Y
+Combinator and a General Partner.” Its source was the
+[official Y Combinator profile](https://www.ycombinator.com/people/garry-tan).
+The partial-stage receipt failed verification against the final input; the new
+final receipt passed, and a changed correction epoch was rejected. The observed
+final receipt reference was `jev:abb68512eb489f146`, model `jev-1.13.0`, with
+snapshot digest `230c6d5b004d2ce39630b9bef0901a71380a600e7b1657d99f1d724aa1ec442f`.
+Receipts expire and are process-local; this reference is audit evidence, not a
+reusable authorization.
+
+These are synthetic, real-provider helper checks, not end-to-end browser or
+glasses latency measurements. Keep the runtime feature flag off until its own
+integration checks pass. Prefetch may return sources only; it never publishes
+or dispatches an action, and final publication always needs a fresh receipt.

@@ -39,6 +39,8 @@ export interface AmbientInput {
   recentTranscript: MeetingSnapshot['transcript'];
   operatorMessages: { id: string; text: string; createdAt: string }[];
 }
+/** Optional opt-in optimization. Implementations must authorize lookup, and return sources only. */
+export type PrefetchInput = AmbientInput & { partialTranscript: MeetingSnapshot['transcript'] };
 export interface TaskInput {
   id: string;
   meetingId: string;
@@ -58,6 +60,7 @@ export interface AmbientProviders {
   summarize(input: AmbientInput, signal: AbortSignal): Promise<SummaryOutput>;
   recall(query: string, signal: AbortSignal): Promise<Evidence[]>;
   research?(query: string, signal: AbortSignal): Promise<Evidence[]>;
+  prefetch?(input: PrefetchInput, signal: AbortSignal): Promise<Evidence[]>;
   saveSummary(input: { meetingId: string; title: string; summary: MeetingSummary; transcript: MeetingSnapshot['transcript'] }, signal: AbortSignal): Promise<ProviderReceipt>;
   prepareDocument(input: TaskInput, signal: AbortSignal): Promise<{ content?: string; url?: string; evidence?: Evidence[]; receipt: ProviderReceipt }>;
   sendCalendar(input: { meetingId: string; proposal: CalendarAction; idempotencyKey: string; correctionEpoch: number }, signal: AbortSignal): Promise<ProviderReceipt>;
