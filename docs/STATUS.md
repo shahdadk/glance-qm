@@ -55,8 +55,11 @@ Last updated: final integration verification
   compare-and-swap; create-only writes remain create-only. Nine focused tests
   cover safe repeated saves and conflict/error handling. After reboot recovery,
   a real synthetic first create and second replacement of the same GBrain page
-  passed independent readback with distinct revisions. The complete two-QM-
-  summary controller verifier is included; its post-reboot result is pending.
+  passed independent readback with distinct revisions. The complete live
+  controller verifier then saved two successive QM summaries to the same
+  GBrain page in 8,424 ms, with distinct receipts and matching context digests,
+  while listening and without End. It completed with zero warnings at
+  2026-09-27T23:24:46Z.
 - A host reboot stopped the local stack and removed the temporary QM checkout.
   The pinned source was restored to persistent storage. Backend transport and
   the replacement HTTPS tunnel are verified, including authenticated snapshot
