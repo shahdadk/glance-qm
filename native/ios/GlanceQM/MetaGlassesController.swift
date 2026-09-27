@@ -33,6 +33,7 @@ struct GlassesCard {
     var captureLabel: String = "Pause"
     var captureAction: (() -> Void)?
     var sourceLabel: String = "Context"
+    var brandAction: (() -> Void)?
 }
 
 /// One real DAT DeviceSession owns both Speech and Display. No simulated device is created.
@@ -416,7 +417,7 @@ final class MetaGlassesController: ObservableObject {
         pendingCard = card
         #if !GLANCE_PHONE_ONLY
         guard displayReady, let display else { return }
-        let key = [card.title, card.body, card.primaryLabel, card.secondaryLabel, String(card.showsButtons), String(card.showsSecondary), card.identity ?? "", String(card.isContextCard), card.captureLabel, card.sourceLabel].joined(separator: "\u{1F}")
+        let key = [card.title, card.body, card.primaryLabel, card.secondaryLabel, String(card.showsButtons), String(card.showsSecondary), card.identity ?? "", String(card.isContextCard), card.captureLabel, card.sourceLabel, String(card.brandAction != nil)].joined(separator: "\u{1F}")
         guard key != lastRenderedKey else { return }
         lastRenderedKey = key
         let current = generation
@@ -428,7 +429,17 @@ final class MetaGlassesController: ObservableObject {
             do {
                 try await display.send(
                     FlexBox(direction: .column, spacing: 12, alignment: .start, crossAlignment: .center) {
-                        Text("kompX", style: .heading).alignSelf(.center)
+                        if let brandAction = card.brandAction {
+                            ButtonGroup(alignment: .center) {
+                                Button(label: "kompX", style: .secondary, onClick: { [weak self] in
+                                    Task { @MainActor in
+                                        guard let self, self.generation == current, self.lastRenderedKey == key else { return }
+                                        NativeDiagnostics.record(["lastLensTapAt": ISO8601DateFormatter().string(from: Date()), "lastLensButton": "kompX"])
+                                        brandAction()
+                                    }
+                                }).actionRole(.primary)
+                            }
+                        } else { Text("kompX", style: .heading).alignSelf(.center) }
                         if card.isContextCard {
                             ButtonGroup(alignment: .center) {
                                 Button(label: card.captureLabel, style: .primary, onClick: { [weak self] in
@@ -441,13 +452,15 @@ final class MetaGlassesController: ObservableObject {
                             }
                         }
                         if card.showsButtons && !card.isContextCard { ButtonGroup(alignment: .center) {
-                            Button(label: card.primaryLabel, style: .primary, onClick: { [weak self] in
+                            let mainButton = Button(label: card.primaryLabel, style: .primary, onClick: { [weak self] in
                                 Task { @MainActor in
                                     guard let self, self.generation == current, self.lastRenderedKey == key else { return }
                                     NativeDiagnostics.record(["lastLensTapAt": ISO8601DateFormatter().string(from: Date()), "lastLensButton": card.primaryLabel])
                                     card.primary?()
                                 }
-                            }).actionRole(.primary)
+                            })
+                            if card.brandAction == nil { mainButton.actionRole(.primary) }
+                            else { mainButton }
                             if card.showsSecondary { Button(label: card.secondaryLabel, style: .secondary, onClick: { [weak self] in
                                 Task { @MainActor in
                                     guard let self, self.generation == current, self.lastRenderedKey == key else { return }

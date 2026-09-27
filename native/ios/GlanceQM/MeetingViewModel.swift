@@ -606,12 +606,12 @@ final class MeetingViewModel: ObservableObject {
             return
         }
         if focus == .listening, transientNotice == nil {
-            let body = startFailureMessage ?? (isCapturing ? (hasHeardSpeech ? "Listening" : "Awaiting speech") : "Microphone off")
+            let body = startFailureMessage ?? ""
             displayTitle = "kompX"; displayBody = body
-            displayPrimaryLabel = "Liquid Energy"; displaySecondaryLabel = isCapturing ? "Pause" : "Start"
-            primary = { [weak self] in self?.showPreloadedBrief() }
-            secondary = { [weak self] in self?.toggleExplicitCapture() }
-            glasses.render(GlassesCard(title: "kompX", body: body, primaryLabel: "Liquid Energy", secondaryLabel: displaySecondaryLabel, primary: primary, secondary: secondary, showsSecondary: true, identity: "home-preloaded-brief"))
+            displayPrimaryLabel = isCapturing ? "Pause" : "Start"; displaySecondaryLabel = ""
+            primary = { [weak self] in self?.toggleExplicitCapture() }
+            secondary = nil
+            glasses.render(GlassesCard(title: "kompX", body: body, primaryLabel: displayPrimaryLabel, primary: primary, showsSecondary: false, identity: "home-preloaded-brief", brandAction: { [weak self] in self?.showPreloadedBrief() }))
             return
         }
         if let message = startFailureMessage, !isCapturing, focus == .listening {

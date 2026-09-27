@@ -4,9 +4,10 @@ Last updated: final integration verification
 
 ## Implemented
 
-- At the operator's request, the native home screen now offers a manual
-  **Liquid Energy** button that immediately opens a preloaded, three-bullet
-  company brief. It is labeled “Preloaded brief” with the public company source
+- At the operator's request, selecting **kompX** on the native home screen
+  immediately opens a preloaded, three-bullet Liquid Energy company brief.
+  The home screen retains Start/Pause without an extra company button.
+  The brief is labeled “Preloaded brief” with the public company source
   and stays open until Done. This local path performs no live AI lookup and
   does not start the microphone. It uses the SDK's primary/select action;
   a distinct middle-finger or Back gesture binding is not claimed.
