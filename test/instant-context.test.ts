@@ -62,7 +62,7 @@ describe('native instant context', () => {
   it('preserves decimals and negation instead of restarting at an internal period', async () => {
     const fixture = gate(); const enriched = input();
     const sentence = 'Ada Lovelace did not save $1.5 billion through the Analytical Engine.';
-    enriched.evidence.push({ id: 'exa:1', kind: 'external', text: sentence, label: 'Ada biography', url: 'https://museum.org/ada' });
+    enriched.evidence.push({ id: 'exa:1', kind: 'external', text: sentence, label: 'Ada Lovelace biography', url: 'https://museum.org/ada' });
     const result = await tryInstantContext(fixture.gate, enriched, signal());
     expect(result).toMatchObject({ kind: 'cue', text: `Possible match: ${sentence}` });
     const overlong = input();
@@ -71,7 +71,7 @@ describe('native instant context', () => {
   });
   it('lets Jev hold unrelated previous sources instead of treating a string match as identity proof', async () => {
     const fixture = gate(true); const current = input();
-    current.evidence.push({ id: 'exa:old', kind: 'external', text: 'An unrelated person founded a business.', label: 'Different biography', url: 'https://museum.org/other' });
+    current.evidence.push({ id: 'exa:old', kind: 'external', text: 'Grace Hopper developed an early computer compiler.', label: 'Grace Hopper biography', url: 'https://museum.org/other' });
     expect(await tryInstantContext(fixture.gate, current, signal())).toMatchObject({ kind: 'quiet' });
     expect(fixture.batch).toHaveBeenCalledTimes(1);
   });
@@ -84,8 +84,8 @@ describe('native instant context', () => {
     expect(result).toMatchObject({ kind: 'cue', text: `Possible match: ${sentence}`, evidenceIds: ['exa:alias'] });
     expect(result?.authorization?.verify(current)).toBe(true);
     const q = fixture.batch.mock.calls[1]![0].questions.action!;
-    expect(q.instructions).toContain('organization/role context conflicts');
-    expect(q.instructions).toContain('phonetic/spelling variant');
+    expect(q.instructions).toContain('conflicting organization/role');
+    expect(q.instructions).toContain('ASR spelling differences');
   });
   it('never publishes partial speech, but explicitly authorized prefetch can select research only', async () => {
     const fixture = gate(); const partial = input(undefined, false);

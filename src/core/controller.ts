@@ -83,6 +83,7 @@ export class MeetingController extends EventEmitter {
   private finalizers = new Map<string, Promise<void>>();
   private summaries = new Map<string, Promise<void>>();
   private summaryWrites = new Map<string, Promise<ProviderReceipt | undefined>>();
+  private summaryAttempts = new Map<string, number>();
   private actionRuns = new Map<string, Promise<void>>();
   private taskRuns = new Map<string, Promise<void>>();
   private prefetches = new Map<string, PartialPrefetch>();
@@ -620,8 +621,19 @@ export class MeetingController extends EventEmitter {
   private async rollSummaries(): Promise<void> {
     if (this.closed || !this.providers.configured.qm) return;
     try {
-      for (const record of await this.store.list()) {
-        if (record.status !== 'ended' && record.transcript.some(segment => segment.isFinal) && (!record.summary || record.summaryContextDigest !== this.contextDigest(record))) void this.summarize(record.id).catch(error => this.warning(record.id, 'summary_unavailable', this.errorText(error)));
+      const available = Math.max(0, 2 - this.summaries.size);
+      if (!available) return;
+      const activity = (record: MeetingRecord): string => record.transcript.filter(segment => segment.isFinal).at(-1)?.capturedAt ?? record.createdAt;
+      const candidates = (await this.store.list()).filter(record => record.status !== 'ended' && !this.summaries.has(record.id) && record.transcript.some(segment => segment.isFinal) && (!record.summary || record.summaryContextDigest !== this.contextDigest(record))).sort((a, b) => activity(b).localeCompare(activity(a)));
+      // Reserve the first slot for the freshest conversation; age the second slot
+      // fairly so older paused rooms cannot monopolize the live user's work.
+      const selected = candidates.splice(0, 1);
+      candidates.sort((a, b) => (this.summaryAttempts.get(a.id) ?? 0) - (this.summaryAttempts.get(b.id) ?? 0) || activity(b).localeCompare(activity(a)));
+      selected.push(...candidates.slice(0, available - selected.length));
+      for (const record of selected) {
+        if (this.summaries.size >= 2) break;
+        this.summaryAttempts.set(record.id, this.options.now());
+        void this.summarize(record.id).catch(error => this.warning(record.id, 'summary_unavailable', this.errorText(error)));
       }
     } catch { /* Individual request paths still surface storage failure. */ }
   }
@@ -629,6 +641,7 @@ export class MeetingController extends EventEmitter {
   private summarize(id: string): Promise<void> {
     const running = this.summaries.get(id);
     if (running) return running;
+    if (this.summaries.size >= 2) return Promise.race([...this.summaries.values()].map(run => run.catch(() => undefined))).then(() => this.summarize(id));
     const promise = (async () => {
       const record = await this.get(id); const input = this.input(record, record.status === 'ended' || !record.summary);
       const summary = summaryOutputSchema.parse(await bounded(signal => this.providers.summarize(input, signal), this.options.providerTimeoutMs));

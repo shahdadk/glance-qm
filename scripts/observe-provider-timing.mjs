@@ -22,8 +22,10 @@ globalThis.fetch = async (input, init) => {
   log({ id, provider, phase, tentative, event: 'start', at: start });
   try {
     const response = await original(input, init);
-    await response.clone().arrayBuffer();
-    log({ id, provider, phase, tentative, event: 'complete', at: Date.now(), status: response.status, elapsedMs: Date.now() - start });
+    const bytes = await response.clone().arrayBuffer();
+    let choices;
+    if (provider === 'jev') { try { const body = JSON.parse(Buffer.from(bytes).toString()); choices = Object.values(body.answers || {}).filter(answer => answer.type === 'choice').map(answer => ({ choice: answer.choice, confidence: answer.confidence, chosenProbability: answer.probabilities?.[answer.choice] })); } catch {} }
+    log({ id, provider, phase, tentative, event: 'complete', at: Date.now(), status: response.status, elapsedMs: Date.now() - start, ...(choices ? { choices } : {}) });
     return response;
   } catch (error) { log({ id, provider, phase, tentative, event: 'error', at: Date.now(), error: error?.name || 'Error' }); throw error; }
 };
