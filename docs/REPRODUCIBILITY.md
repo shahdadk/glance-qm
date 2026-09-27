@@ -68,8 +68,9 @@ remain separate prerequisites. A simulator build is not a glasses receipt.
 
 ## Verification record
 
-On 2026-09-27, the default verifier passed against committed application revision
-`6f10bb2166f9984ed6a2d997be263b22ed79b5f3`, extracted with `git archive HEAD`.
+On 2026-09-27, the default verifier passed against the committed `HEAD`,
+extracted with `git archive HEAD`; the verifier prints the exact revision it
+tests in its receipt.
 It used Node 22.15.0, an empty temporary home directory, no inherited provider
 credentials, and npm's download cache. It did not copy the working tree,
 `node_modules`, external runtime checkouts, databases, or private configuration.
@@ -77,7 +78,7 @@ credentials, and npm's download cache. It did not copy the working tree,
 | Check | Result |
 | --- | --- |
 | `npm ci --no-audit --no-fund` | Passed; 209 packages installed from the lockfile |
-| `npm run check` | Passed strict backend/web TypeScript checks and 84 tests in six files |
+| `npm run check` | Passed strict backend/web TypeScript checks and 161 tests in ten files |
 | `npm run build` | Passed production Vite build, 39 modules |
 | `npm run demo` | Passed nine explicitly labeled offline fixture checks; zero calendar sends |
 | Local npm dependency/source import checks | Passed |
@@ -87,11 +88,12 @@ web application without the operator's hidden configuration. It does not prove
 provider availability, external side effects, Docker provisioning, or hardware.
 No existing QM, GBrain, backend, web, or device runtime was stopped.
 
-The checked revision contains 73 files and **no native files**. Native source,
-its package lock, and its setup document were still awaiting a separate commit.
-The Meta pin above records the intended native dependency; this application
-verification is not a native clean-clone or hardware pass. Native build and
-device acceptance require their own committed-revision receipt.
+The checked revision contains 111 files, including the native iOS source, its
+Swift package lock, and the Meta setup document. The ignored `DerivedData`,
+`MetaWearablesDAT` inspection checkout, and native evidence directories are
+not submission inputs. This repository verification is not a native clean-clone
+or sustained hardware pass; the native owner records signed-build, transport,
+and device acceptance separately.
 
 A bounded scan of that committed tree found no common credential/private-key
 patterns or committed private-state/generated-output paths. One historical
