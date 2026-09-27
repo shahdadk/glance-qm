@@ -1,8 +1,8 @@
-# Product brief
+# kompX product brief
 
 ## Promise
 
-Glance QM quietly helps a live meeting from Meta glasses. It listens to the
+kompX quietly helps a live meeting from Meta glasses. It listens to the
 conversation continuously, surfaces a useful fact or next step only when the
 context supports it, and turns agreed work into a shared QM project that
 participants can inspect and correct.
@@ -19,7 +19,7 @@ invitation is sent only after an exact preview is confirmed.
 ## Interaction principles
 
 - Listening is continuous, visible, and interruptible.
-- Silence is a valid result. Glance does not narrate every transcript segment.
+- Silence is a valid result. kompX does not narrate every transcript segment.
 - Cues are short, grounded, and attributable to source evidence.
 - A correction changes the context revision and makes stale proposals unsafe.
 - Participants share the same durable work and can see who produced it.

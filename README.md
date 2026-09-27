@@ -1,10 +1,12 @@
-# Glance QM
+# kompX
 
-Glance QM is an ambient Jarvis-style meeting companion for Meta glasses. It
-keeps a meeting transcript active, uses grounded context to decide when a
-short cue is useful, and turns the meeting's decisions into shared QM work.
-GBrain provides durable meeting memory. Memorable can preserve successful
-workflows once the core path is proven.
+kompX is an ambient Jarvis-style meeting companion for Meta glasses. Its
+native iOS bridge pairs once with the glasses, keeps a meeting transcript
+active, uses grounded context to decide when a short lens cue is useful, and
+turns the meeting's decisions into shared QM work. The phone/browser companion
+is a debugging and shared-room surface; it is not the glasses experience.
+GBrain provides durable meeting memory. Memorable preserves successful
+workflows after the core task path completes.
 
 This is a clean-history hackathon repository owned by `shahdadk`. It is
 inspired by the earlier Glance work, but it is an independent implementation.
@@ -13,10 +15,15 @@ integration status.
 
 ## Current state
 
-The repository currently contains the foundation contract and runtime
-scaffold. The Meta, QM, GBrain, and Memorable connections are deliberately
-reported as proposed until they have been connected and rehearsed. A local
-fixture or export does not count as a live integration receipt.
+The backend, ambient controller, QM/GBrain/Memorable adapters, web companion,
+and native iOS bridge are implemented. QM is live verified through the
+connected verifier, self-hosted GBrain has live OAuth MCP read/write with
+keyword search, and Memorable has a live workflow save/readback. Google
+Calendar OAuth read and exact preview verification pass; no invitation has
+been sent. Jev is code- and fixture-verified but remains blocked on a live
+credential. The native app is installed and registered, but a real glasses
+connection is still unverified. A local fixture or export does not count as a
+live integration receipt.
 
 ## Quick start
 
@@ -42,13 +49,12 @@ or generated private briefs in Git.
 
 ## Product loop
 
-1. A participant starts one shared QM meeting.
+1. A participant starts one shared QM meeting and pairs the native bridge once.
 2. Meta Speech supplies partial and final transcript segments continuously.
-3. The ambient controller coalesces final segments and asks QM whether to stay
-   quiet, retrieve GBrain context, show a grounded cue, or stage follow-up
-   work.
-4. Participants see the same cues, transcript, tasks, and corrections through
-   QM multiplayer.
+3. While listening, the lens stays quiet unless a grounded cue is useful; it
+   can show a cue, task, summary, or exact action preview.
+4. Participants see the same context, corrections, and QM work through the
+   shared room. The companion supports diagnosis and rehearsal.
 5. Ending the meeting saves an attributed summary and starts the agreed
    document task. A calendar invitation remains a preview until an exact
    proposal is confirmed.
@@ -58,8 +64,10 @@ The public boundary for this loop is defined in
 
 ## Verification
 
-Run `npm run check` after core changes. Run `npm run demo` for the deterministic
-fixture flow. Before submission, rehearse the live flow with two participants:
+Run `npm run check`, `npm run build`, and `npm run demo` after core changes.
+The current source verification covers both TypeScript projects and 84 tests;
+the connected verifier covers QM, GBrain, Memorable, calendar preview, and
+recovery behavior. Before submission, rehearse the native glasses path with
 continuous transcript, one relevant memory-backed cue, a correction that
 invalidates stale work, summary persistence, document creation, and one
 confirmed calendar invitation without duplicates. Record the actual outcome in

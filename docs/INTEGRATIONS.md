@@ -12,35 +12,45 @@ follow-up task run in that same project. The adapter must use QM's documented
 interfaces; it must not invent a private REST contract or treat a fixture as
 an integration receipt.
 
-Status: foundation contract only; connection pending runtime provisioning.
+Status: connected and live verified. The final connected verifier passed 14/14
+checks, including an actual QM document completion and a durable shared
+session. The local runtime is pinned and its secrets remain outside this
+repository.
 
 ## GBrain
 
-Hosted GBrain is the intended memory layer. It will supply relevant meeting
-history and receive attributed decisions, summaries, and task provenance
-through its documented connector. Access tokens belong only in ignored local
-state or the runtime secret manager.
+Self-hosted GBrain is the memory layer for this submission. It supplies
+relevant meeting history and receives attributed decisions, summaries, and task
+provenance through its OAuth MCP connector. Access tokens belong only in
+ignored local state or the runtime secret manager. Keyword search is the
+reproducible default because the available embedding providers are quota
+limited; semantic/vector recall is not claimed.
 
-Status: foundation contract only; connection pending credential and connector
-verification.
+Status: live verified for OAuth, MCP discovery, durable `put_page`/`get_page`,
+and lexical `search`. The dedicated PostgreSQL/pgvector service is pinned and
+isolated. No gbrain.io-hosted account is required for the demonstrated path.
 
 ## Memorable
 
-Memorable is an optional second-pass integration. After the core flow works,
-the runtime may record the successful QM document workflow and retrieve it for
-a later task. This keeps workflow memory distinct from GBrain's meeting memory.
+Memorable records the successful QM document workflow and retrieves it for a
+later task. This keeps workflow memory distinct from GBrain's meeting memory;
+the adapter stores abstract steps and verified receipts rather than meeting
+transcripts or attendee identities.
 
-Status: planned, not on the critical path.
+Status: live verified for a procedure save, list/readback, and recall. Setup and
+consent remain explicit runtime prerequisites.
 
 ## Meta glasses
 
 The intended device path uses Meta's documented Device Access Toolkit Speech
-and Display capabilities. Speech supplies partial and final transcript events;
-Display receives listening state, cues, and exact action previews. A browser
-fixture may help debug transport but does not establish a glasses verification.
+and Display capabilities through a native iOS bridge. The bridge pairs once;
+Speech supplies partial and final transcript events, and Display receives a
+quiet listening state, useful cues, tasks, summaries, and exact action
+previews. The browser/mobile companion supports debugging and shared-room
+rehearsal; it does not claim device delivery.
 
-Status: planned; hardware and signed companion availability must be recorded
-after live rehearsal.
+Status: the native app is installed and registered. A real glasses connection
+and sustained device transcript/display rehearsal remain unverified.
 
 ## River AI and other sponsors
 

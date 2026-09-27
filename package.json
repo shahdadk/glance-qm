@@ -2,7 +2,7 @@
   "name": "glance-qm",
   "version": "0.1.0",
   "private": true,
-  "description": "Ambient Jarvis for Meta glasses using QM, GBrain, and Memorable.",
+  "description": "kompX — ambient Meta glasses interface for QM and GBrain.",
   "type": "module",
   "engines": {
     "node": ">=22"
