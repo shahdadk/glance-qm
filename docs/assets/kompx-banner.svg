@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">kompX — stay in the conversation</title>
+  <desc id="desc">A context assistant for Meta glasses. On the right, an interface illustration shows a preloaded Liquid Energy brief with three bullets.</desc>
+  <rect width="1200" height="420" rx="20" fill="#101418"/>
+  <path d="M665 34v352" stroke="#293138"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="56" y="69" fill="#a8dcca" font-size="12" letter-spacing="2">BUILT FOR META RAY-BAN DISPLAY</text>
+    <text x="52" y="165" fill="#f4f6f4" font-size="86" font-weight="700" letter-spacing="-5">komp<tspan fill="#a8dcca">X</tspan></text>
+    <text x="56" y="227" fill="#f4f6f4" font-size="29">Stay in the conversation.</text>
+    <text x="56" y="266" fill="#a6b0b8" font-size="19">Context. Memory. Work.</text>
+    <text x="56" y="353" fill="#a6b0b8" font-size="15">QM  /  GBrain  /  Memorable  /  Exa  /  Jev</text>
+    <text x="905" y="66" fill="#f4f6f4" font-size="25" font-weight="700" text-anchor="middle">kompX</text>
+    <rect x="861" y="83" width="88" height="33" rx="16" fill="#293138"/>
+    <text x="905" y="105" fill="#e5eae8" font-size="13" text-anchor="middle">Start / Pause</text>
+    <rect x="716" y="140" width="378" height="210" rx="16" fill="#1b2329" stroke="#35433e"/>
+    <text x="741" y="179" fill="#f4f6f4" font-size="24" font-weight="700">Liquid Energy</text>
+    <text x="741" y="217" fill="#dbe5e0" font-size="17">•  Modular AI compute</text>
+    <text x="741" y="249" fill="#dbe5e0" font-size="17">•  High-density air cooling</text>
+    <text x="741" y="281" fill="#dbe5e0" font-size="17">•  Adaptive thermal controls</text>
+    <text x="741" y="323" fill="#9eada5" font-size="12">PRELOADED BRIEF · COMPANY CLAIMS</text>
+    <text x="905" y="385" fill="#7f8c95" font-size="12" text-anchor="middle">Interface illustration</text>
+  </g>
+</svg>

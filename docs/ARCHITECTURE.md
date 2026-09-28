@@ -58,7 +58,14 @@ parameters.
 
 The runtime keeps a bounded active context while retaining the complete meeting
 for retrieval. It coalesces pending transcript work and allows one judgment at
-a time. QM returns a typed outcome: quiet, retrieve memory, show a cue, or
-stage a task/action. Code owns ordering, revision checks, provider timeouts,
-and side-effect gates; semantic systems own interpretation and evidence
-selection.
+a time. In Jev-native mode, QM proposes bounded structured candidates and Jev selects
+an outcome: quiet, retrieve memory, research, show a cue, or stage a task/action.
+The optional accelerated public-context path uses direct Jev selection over
+transcript/source candidates with Exa retrieval. Judgment, summary, and task
+work use separate QM thread namespaces. Code owns ordering, revision checks,
+provider timeouts, and side-effect gates.
+
+The native app also provides a local, explicitly labeled preloaded brief for
+manual interface demonstrations. Selecting the kompX wordmark opens that card
+without a provider call or microphone activation. This presentation path is
+separate from ambient inference; it does not generate a model receipt.

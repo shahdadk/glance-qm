@@ -1,4 +1,4 @@
-# Glance QM
+# kompX
 
 This repository is the clean-history submission project for the hackathon. It
 builds an ambient Jarvis-style companion for Meta glasses: continuous meeting
@@ -8,8 +8,6 @@ small enough to rehearse in a single hackathon session.
 
 Before substantial changes, read `README.md`, `docs/PRODUCT.md`,
 `docs/ARCHITECTURE.md`, `docs/INTEGRATIONS.md`, and `docs/STATUS.md`.
-
-Read README.md, docs/PRODUCT.md, docs/ARCHITECTURE.md, docs/INTEGRATIONS.md, and docs/STATUS.md before substantial changes.
 
 This is an independent hackathon project inspired by Glance. Do not modify the
 Glance repository or copy its credentials, sessions, personal transcripts,

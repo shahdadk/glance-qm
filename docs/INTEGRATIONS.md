@@ -6,9 +6,9 @@ status without recording the command or rehearsal that established it.
 
 ## QM
 
-QM is the intended shared execution environment and multiplayer surface. The
-project will use one shared meeting/session for participants and a separate
-follow-up task run in that same project. The adapter must use QM's documented
+QM provides shared execution context and the multiplayer runtime. The project
+uses separate judgment, summary, and follow-up task threads within its
+configured shared project. The adapter must use QM's documented
 interfaces; it must not invent a private REST contract or treat a fixture as
 an integration receipt.
 
@@ -32,8 +32,9 @@ isolated. No gbrain.io-hosted account is required for the demonstrated path.
 
 ## Memorable
 
-Memorable records the successful QM document workflow and retrieves it for a
-later task. This keeps workflow memory distinct from GBrain's meeting memory;
+Memorable records verified summary-persistence procedures and recalls
+workflow reference material for summaries and document preparation. This keeps
+workflow memory distinct from GBrain's meeting memory;
 the adapter stores abstract steps and verified receipts rather than meeting
 transcripts or attendee identities.
 
@@ -49,17 +50,21 @@ quiet listening state, useful cues, tasks, summaries, and exact action
 previews. The browser/mobile companion supports debugging and shared-room
 rehearsal; it does not claim device delivery.
 
-Status: signed build and native tests pass; the physical Speech path produced a
-nonempty final transcript that reached the backend with HTTP 200. Sustained
-background capture and full Display rehearsal remain unverified. The latest
-source layout is documented separately from the installed build.
+Status: signed build and native tests pass; physical Meta Speech uploaded
+nonempty final transcripts with HTTP 200. A sourced company card reached the
+glasses and the wearer used Details and Done. That flow involved reprocessing;
+automatic reliability and sustained background capture remain open. The native
+app also has an explicitly labeled manual preloaded brief. See
+[META-SETUP.md](META-SETUP.md) for the separate hardware and demo evidence.
 
 ## Exa
 
 Exa is the only public web-research provider. The server sends a short,
 standalone public topic and returns up to four bounded, attributed sources.
-Private transcript text, names, identifiers, URLs, and credentials are blocked
-at the query boundary. GBrain remains the source for private/project memory.
+Queries contain minimal public topics, such as a spoken public professional
+name and organization. Private conversation, credentials, and private
+identifiers must not be sent as search queries. GBrain remains the source for
+private/project memory.
 
 Status: live adapter and factory retrieval passed with four real sources, and
 the core's research-first PRD path was live verified. There is no silent search
@@ -67,14 +72,18 @@ fallback.
 
 ## Jev
 
-Jev is an optional semantic selection gate after QM produces a bounded typed
-candidate set. Receipts are verified against the current context immediately
-before the core applies a judgment; a hold, timeout, changed context, or
-invalid response produces no action.
+Jev selects actions from bounded candidates and authorizes context cards.
+The optional accelerated path combines literal source candidates with Exa
+research and direct Jev judgments; the general path uses QM proposals followed
+by Jev selection. Receipts are verified against current context before the core
+applies a judgment. A hold, timeout, changed context, or invalid response does
+not authorize publication.
 
-Status: live adapter/gate probes and Jev-native core verification passed. QM
-remains the default mode when `GLANCE_DECISION_MODE=qm`; Jev remains an
-optional decision mode and never authorizes an external action by itself.
+Status: live adapter/gate probes and Jev-native core verification passed.
+The demo launcher defaults to `jev-native`; the example environment explicitly
+selects `qm` until changed. `GLANCE_INSTANT_CONTEXT=true` opts into accelerated
+public-context lookup and requires Jev-native mode. Jev never replaces wearer
+confirmation for an external send.
 
 ## Calendar and document delivery
 
